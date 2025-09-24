@@ -25,7 +25,7 @@
 			$('#typing-indicator').hide();
 		}
 
-		function addMessage(text, sender) {
+		function addMessage(text, sender, interactionId) {
 			var messageHtml = '';
 			if (sender === 'bot') {
 				var markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
@@ -41,7 +41,15 @@
 						htmlContent += escapeHtml(parts[i]);
 					}
 				}
-				messageHtml = '<div class="chat-message ' + sender + '"><div class="message-bubble ' + sender + '">' + htmlContent + '</div></div>';
+				messageHtml = '<div class="chat-message ' + sender + '" data-interaction-id="' + (interactionId || '') + '">';
+				messageHtml += '<div class="message-bubble ' + sender + '">' + htmlContent + '</div>';
+				if (interactionId) {
+					messageHtml += '<div class="feedback-buttons" style="margin-top: 8px; text-align: right;">';
+					messageHtml += '<button class="feedback-btn helpful" data-interaction-id="' + interactionId + '" data-helpful="1" style="background: none; border: none; color: #28a745; cursor: pointer; font-size: 16px; margin-right: 10px;" title="This was helpful">👍</button>';
+					messageHtml += '<button class="feedback-btn not-helpful" data-interaction-id="' + interactionId + '" data-helpful="0" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px;" title="This was not helpful">👎</button>';
+					messageHtml += '</div>';
+				}
+				messageHtml += '</div>';
 			} else {
 				messageHtml = '<div class="chat-message ' + sender + '"><div class="message-bubble ' + sender + '">' + escapeHtml(text) + '</div></div>';
 			}
@@ -71,7 +79,7 @@
 			}).done(function(response){
 				hideTyping();
 				if (response && response.success && response.data && response.data.response) {
-					addMessage(response.data.response, 'bot');
+					addMessage(response.data.response, 'bot', response.data.interaction_id);
 				} else {
 					addMessage('Sorry, I encountered an error. Please try again.', 'bot');
 				}
@@ -110,6 +118,39 @@
 				chatOpen = false;
 				$('#ai-chatbot-container').hide();
 			}
+		});
+
+		// Feedback button handlers
+		$(document).on('click', '.feedback-btn', function(e){
+			e.preventDefault();
+			var $btn = $(this);
+			var interactionId = $btn.data('interaction-id');
+			var helpful = $btn.data('helpful');
+			
+			if (!interactionId) return;
+			
+			// Disable all feedback buttons for this message
+			$btn.closest('.chat-message').find('.feedback-btn').prop('disabled', true);
+			
+			// Submit feedback
+			$.post((window.AIChatbot && AIChatbot.ajaxUrl) ? AIChatbot.ajaxUrl : window.ajaxurl, {
+				action: 'submit_feedback',
+				interaction_id: interactionId,
+				helpful: helpful,
+				nonce: (window.AIChatbot && AIChatbot.nonce) ? AIChatbot.nonce : ''
+			}).done(function(response){
+				if (response && response.success) {
+					// Show feedback confirmation
+					var $feedbackButtons = $btn.closest('.feedback-buttons');
+					$feedbackButtons.html('<span style="color: #28a745; font-size: 12px;">✓ Thank you for your feedback!</span>');
+				} else {
+					// Re-enable buttons on error
+					$btn.closest('.chat-message').find('.feedback-btn').prop('disabled', false);
+				}
+			}).fail(function(){
+				// Re-enable buttons on error
+				$btn.closest('.chat-message').find('.feedback-btn').prop('disabled', false);
+			});
 		});
 	});
 })(jQuery);

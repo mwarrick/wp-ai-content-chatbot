@@ -24,6 +24,7 @@ $offset = ($page - 1) * $per_page;
 // Get filter parameters
 $filter_success = isset($_GET['filter_success']) ? $_GET['filter_success'] : '';
 $filter_date = isset($_GET['filter_date']) ? $_GET['filter_date'] : '';
+$filter_feedback = isset($_GET['filter_feedback']) ? $_GET['filter_feedback'] : '';
 
 // Build query
 global $wpdb;
@@ -40,6 +41,18 @@ if ($filter_success !== '') {
 if (!empty($filter_date)) {
     $where_conditions[] = 'DATE(timestamp) = %s';
     $where_values[] = $filter_date;
+}
+
+if ($filter_feedback !== '') {
+    if ($filter_feedback === 'with_feedback') {
+        $where_conditions[] = 'feedback_helpful IS NOT NULL';
+    } elseif ($filter_feedback === 'helpful') {
+        $where_conditions[] = 'feedback_helpful = 1';
+    } elseif ($filter_feedback === 'not_helpful') {
+        $where_conditions[] = 'feedback_helpful = 0';
+    } elseif ($filter_feedback === 'no_feedback') {
+        $where_conditions[] = 'feedback_helpful IS NULL';
+    }
 }
 
 $where_clause = '';
@@ -83,9 +96,17 @@ $total_pages = ceil($total_items / $per_page);
                 
                 <input type="date" name="filter_date" value="<?php echo esc_attr($filter_date); ?>" placeholder="Filter by date">
                 
+                <select name="filter_feedback">
+                    <option value="">All Feedback</option>
+                    <option value="with_feedback" <?php selected($filter_feedback, 'with_feedback'); ?>>With Feedback</option>
+                    <option value="helpful" <?php selected($filter_feedback, 'helpful'); ?>>Helpful Only</option>
+                    <option value="not_helpful" <?php selected($filter_feedback, 'not_helpful'); ?>>Not Helpful Only</option>
+                    <option value="no_feedback" <?php selected($filter_feedback, 'no_feedback'); ?>>No Feedback</option>
+                </select>
+                
                 <input type="submit" class="button" value="Filter">
                 
-                <?php if (!empty($filter_success) || !empty($filter_date)): ?>
+                <?php if (!empty($filter_success) || !empty($filter_date) || !empty($filter_feedback)): ?>
                     <a href="<?php echo admin_url('admin.php?page=ai-chatbot-logs'); ?>" class="button">Clear Filters</a>
                 <?php endif; ?>
             </div>
@@ -106,12 +127,21 @@ $total_pages = ceil($total_items / $per_page);
         $success_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_name WHERE success = 1");
         $error_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_name WHERE success = 0");
         $avg_response_time = $wpdb->get_var("SELECT AVG(response_time_ms) FROM $table_name WHERE success = 1 AND response_time_ms > 0");
+        $feedback_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_name WHERE feedback_helpful IS NOT NULL");
+        $helpful_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_name WHERE feedback_helpful = 1");
+        $not_helpful_count = $wpdb->get_var("SELECT COUNT(*) FROM $table_name WHERE feedback_helpful = 0");
         ?>
         <p>
             <strong>Total Interactions:</strong> <?php echo number_format($total_items); ?> | 
             <strong>Successful:</strong> <?php echo number_format($success_count); ?> | 
             <strong>Errors:</strong> <?php echo number_format($error_count); ?> | 
             <strong>Avg Response Time:</strong> <?php echo $avg_response_time ? round($avg_response_time) . 'ms' : 'N/A'; ?>
+        </p>
+        <p>
+            <strong>Feedback Received:</strong> <?php echo number_format($feedback_count); ?> | 
+            <strong>Helpful:</strong> <?php echo number_format($helpful_count); ?> | 
+            <strong>Not Helpful:</strong> <?php echo number_format($not_helpful_count); ?> | 
+            <strong>Helpfulness Rate:</strong> <?php echo $feedback_count > 0 ? round(($helpful_count / $feedback_count) * 100) . '%' : 'N/A'; ?>
         </p>
     </div>
     
@@ -129,6 +159,7 @@ $total_pages = ceil($total_items / $per_page);
                     <th style="width: 80px;">Response Time</th>
                     <th>User Query</th>
                     <th>AI Response</th>
+                    <th style="width: 80px;">Feedback</th>
                     <th style="width: 100px;">Actions</th>
                 </tr>
             </thead>
@@ -164,6 +195,15 @@ $total_pages = ceil($total_items / $per_page);
                                 <?php echo esc_html(substr($log->ai_response, 0, 100)); ?>
                                 <?php if (strlen($log->ai_response) > 100): ?>...<?php endif; ?>
                             </div>
+                        </td>
+                        <td>
+                            <?php if ($log->feedback_helpful === '1'): ?>
+                                <span style="color: #28a745; font-weight: bold;">👍 Helpful</span>
+                            <?php elseif ($log->feedback_helpful === '0'): ?>
+                                <span style="color: #dc3545; font-weight: bold;">👎 Not Helpful</span>
+                            <?php else: ?>
+                                <span style="color: #6c757d;">No feedback</span>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <button type="button" class="button button-small" onclick="showLogDetails(<?php echo $log->id; ?>)">
@@ -257,6 +297,24 @@ function showLogDetails(logId) {
                 html += '<h3>Error Details</h3>';
                 html += '<div style="background: #f8d7da; padding: 15px; border-left: 4px solid #dc3545; margin-bottom: 20px;">';
                 html += '<pre style="white-space: pre-wrap; margin: 0; color: #721c24;">' + escapeHtml(log.error_message) + '</pre>';
+                html += '</div>';
+            }
+            
+            // Feedback information
+            if (log.feedback_helpful !== null) {
+                html += '<h3>User Feedback</h3>';
+                html += '<div style="background: #f8f9fa; padding: 15px; border-left: 4px solid #007bff; margin-bottom: 20px;">';
+                html += '<p><strong>Rating:</strong> ' + (log.feedback_helpful == 1 ? '👍 Helpful' : '👎 Not Helpful') + '</p>';
+                if (log.feedback_rating) {
+                    html += '<p><strong>Star Rating:</strong> ' + log.feedback_rating + '/5</p>';
+                }
+                if (log.feedback_comment && log.feedback_comment.trim() !== '') {
+                    html += '<p><strong>Comment:</strong></p>';
+                    html += '<p style="font-style: italic;">' + escapeHtml(log.feedback_comment) + '</p>';
+                }
+                if (log.feedback_timestamp) {
+                    html += '<p><strong>Feedback Date:</strong> ' + log.feedback_timestamp + '</p>';
+                }
                 html += '</div>';
             }
             
