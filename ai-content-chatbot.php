@@ -80,7 +80,11 @@ class AI_Content_Chatbot {
         add_option('ai_chatbot_welcome_message', 'Hi! How can I help you today?');
         add_option('ai_chatbot_placeholder', 'Type your question here...');
         add_option('ai_chatbot_primary_color', '#007cba');
-        add_option('ai_chatbot_system_prompt', "You are a helpful chatbot for the [SITE_NAME] website. Use the following website content, and ONLY this content, to answer the user's question. You MUST include links to the relevant pages in your response if they are provided. If the content doesn't contain relevant information, politely state that you cannot help with that specific query and suggest they browse the website. DO NOT invent information or link to external websites.
+        add_option('ai_chatbot_system_prompt', "You are a helpful chatbot for the [SITE_NAME] website. Use the following website content, and ONLY this content, to answer the user's question. 
+
+IMPORTANT: You MUST include clickable links to relevant pages in your response. The content below includes Markdown links in the format [Page Title](URL). Always include these links in your response when relevant to the user's question.
+
+If the content doesn't contain relevant information, politely state that you cannot help with that specific query and suggest they browse the website. DO NOT invent information or link to external websites.
 
 Website Content:
 [RELEVANT_CONTENT]");
