@@ -78,13 +78,17 @@
 				}
 			}).done(function(response){
 				hideTyping();
+				console.log('Chatbot response:', response); // Debug logging
 				if (response && response.success && response.data && response.data.response) {
+					console.log('Interaction ID:', response.data.interaction_id); // Debug logging
 					addMessage(response.data.response, 'bot', response.data.interaction_id);
 				} else {
+					console.log('Error in response:', response); // Debug logging
 					addMessage('Sorry, I encountered an error. Please try again.', 'bot');
 				}
-			}).fail(function(){
+			}).fail(function(xhr, status, error){
 				hideTyping();
+				console.log('AJAX failed:', status, error, xhr.responseText); // Debug logging
 				addMessage("Sorry, I'm having trouble connecting. Please try again later.", 'bot');
 			}).always(function(){
 				isProcessing = false;
@@ -133,21 +137,25 @@
 			$btn.closest('.chat-message').find('.feedback-btn').prop('disabled', true);
 			
 			// Submit feedback
+			console.log('Submitting feedback:', {interaction_id: interactionId, helpful: helpful}); // Debug logging
 			$.post((window.AIChatbot && AIChatbot.ajaxUrl) ? AIChatbot.ajaxUrl : window.ajaxurl, {
 				action: 'submit_feedback',
 				interaction_id: interactionId,
 				helpful: helpful,
 				nonce: (window.AIChatbot && AIChatbot.nonce) ? AIChatbot.nonce : ''
 			}).done(function(response){
+				console.log('Feedback response:', response); // Debug logging
 				if (response && response.success) {
 					// Show feedback confirmation
 					var $feedbackButtons = $btn.closest('.feedback-buttons');
 					$feedbackButtons.html('<span style="color: #28a745; font-size: 12px;">✓ Thank you for your feedback!</span>');
 				} else {
+					console.log('Feedback submission failed:', response); // Debug logging
 					// Re-enable buttons on error
 					$btn.closest('.chat-message').find('.feedback-btn').prop('disabled', false);
 				}
-			}).fail(function(){
+			}).fail(function(xhr, status, error){
+				console.log('Feedback AJAX failed:', status, error, xhr.responseText); // Debug logging
 				// Re-enable buttons on error
 				$btn.closest('.chat-message').find('.feedback-btn').prop('disabled', false);
 			});

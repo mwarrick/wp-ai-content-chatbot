@@ -564,8 +564,11 @@ Website Content:
         );
         
         // Debug logging
+        error_log('AI Chatbot: Attempting to log interaction. User query: ' . substr($user_query, 0, 50));
         if ($result === false) {
             error_log('AI Chatbot: Failed to insert interaction log. Error: ' . $wpdb->last_error);
+        } else {
+            error_log('AI Chatbot: Successfully logged interaction with ID: ' . $wpdb->insert_id);
         }
         
         return $wpdb->insert_id;
@@ -757,6 +760,9 @@ Website Content:
         $ai_response = '';
         $error_message = '';
         $success = true;
+        
+        // Debug logging
+        error_log('AI Chatbot: handle_chatbot_query called');
         
         try {
             // Security check
