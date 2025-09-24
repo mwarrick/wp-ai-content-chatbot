@@ -23,6 +23,7 @@ class AI_Content_Chatbot {
     public function __construct() {
         add_action('init', array($this, 'init'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_scripts'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_action('admin_menu', array($this, 'add_admin_menu'));
         
         // AJAX handlers
@@ -169,221 +170,11 @@ Website Content:
     }
     
     public function content_index_page() {
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'chatbot_content_index';
-        $per_page = 20;
-        $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
-        $offset = ($current_page - 1) * $per_page;
-        $total_items = $this->get_indexed_content_count();
-        $total_pages = ceil($total_items / $per_page);
-
-        ?>
-        <div class="wrap">
-            <h1>Content Index</h1>
-            <p>Manage your website content index for the chatbot to provide relevant answers.</p>
-            
-            <div style="background: white; padding: 20px; border: 1px solid #ccd0d4; border-radius: 4px; margin: 20px 0;">
-                <h2>Index Management</h2>
-                <p>The chatbot uses indexed content from your website to provide relevant answers to visitor questions.</p>
-                
-                <div style="margin: 20px 0;">
-                    <button type="button" id="index-all-content" class="button button-primary button-large">
-                        📚 Index All Content
-                    </button>
-                    <button type="button" id="clear-index" class="button button-large" style="margin-left: 10px;">
-                        🗑️ Clear Index
-                    </button>
-                </div>
-                
-                <div id="indexing-progress" style="display: none; margin: 20px 0; padding: 15px; background: #f0f6fc; border: 1px solid #c9e3f7; border-radius: 4px;">
-                    <p><strong>Indexing in progress...</strong> <span id="progress-text">0%</span></p>
-                    <div style="background: #e5e7eb; height: 20px; border-radius: 10px; overflow: hidden;">
-                        <div id="progress-bar" style="background: #3b82f6; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 20px;">
-                    <h3>Current Status</h3>
-                    <p><strong>Indexed Items:</strong> <?php echo $total_items; ?></p>
-                    <p><strong>Last Updated:</strong> <?php echo $this->get_last_index_date(); ?></p>
-                </div>
-            </div>
-            
-            <div style="background: white; padding: 20px; border: 1px solid #ccd0d4; border-radius: 4px; margin: 20px 0;">
-                <h2>Recent Indexed Content</h2>
-                <table class="wp-list-table widefat fixed striped">
-                    <thead>
-                        <tr>
-                            <th style="width: 20%;">Title</th>
-                            <th style="width: 8%;">Type</th>
-                            <th style="width: 10%;">Location</th>
-                            <th style="width: 15%;">Tags</th>
-                            <th style="width: 25%;">Keywords</th>
-                            <th style="width: 15%;">Date</th>
-                            <th style="width: 7%;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php $this->display_indexed_content($per_page, $offset); ?>
-                    </tbody>
-                </table>
-
-                <?php if ($total_pages > 1) : ?>
-                    <div class="pagination">
-                        <?php
-                        $base_url = admin_url('admin.php?page=ai-chatbot-content');
-                        if ($current_page > 1) {
-                            echo '<a href="' . esc_url($base_url . '&paged=' . ($current_page - 1)) . '" class="button">« Previous</a>';
-                        }
-                        echo '<span> Page ' . $current_page . ' of ' . $total_pages . ' </span>';
-                        if ($current_page < $total_pages) {
-                            echo '<a href="' . esc_url($base_url . '&paged=' . ($current_page + 1)) . '" class="button">Next »</a>';
-                        }
-                        ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-        
-        <script>
-        jQuery(document).ready(function($) {
-            $('#index-all-content').click(function() {
-                var button = $(this);
-                var progress = $('#indexing-progress');
-                var progressBar = $('#progress-bar');
-                var progressText = $('#progress-text');
-                
-                button.prop('disabled', true).text('Indexing...');
-                progress.show();
-                progressBar.css('width', '0%');
-                progressText.text('0%');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'index_all_content',
-                        nonce: '<?php echo wp_create_nonce('ai_chatbot_admin_nonce'); ?>'
-                    },
-                    success: function(response) {
-                        progressBar.css('width', '100%');
-                        progressText.text('100%');
-                        
-                        setTimeout(function() {
-                            alert('Content indexed successfully!');
-                            location.reload();
-                        }, 1000);
-                    },
-                    error: function(xhr, status, error) {
-                        alert('Error indexing content: ' + error);
-                        console.error('Indexing error:', error);
-                    },
-                    complete: function() {
-                        button.prop('disabled', false).text('📚 Index All Content');
-                        setTimeout(function() {
-                            progress.hide();
-                        }, 2000);
-                    }
-                });
-            });
-            
-            $('#clear-index').click(function() {
-                if (!confirm('Are you sure you want to clear the entire content index? This action cannot be undone.')) {
-                    return;
-                }
-                
-                var button = $(this);
-                button.prop('disabled', true).text('Clearing...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'clear_content_index',
-                        nonce: '<?php echo wp_create_nonce('ai_chatbot_admin_nonce'); ?>'
-                    },
-                    success: function(response) {
-                        alert('Content index cleared successfully!');
-                        location.reload();
-                    },
-                    error: function(xhr, status, error) {
-                        alert('Error clearing index: ' + error);
-                        console.error('Clear index error:', error);
-                    },
-                    complete: function() {
-                        button.prop('disabled', false).text('🗑️ Clear Index');
-                    }
-                });
-            });
-        });
-        </script>
-        <?php
+        include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/content-index.php';
     }
 
     public function search_content_page() {
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'chatbot_content_index';
-        $search_query = isset($_GET['s']) ? sanitize_text_field(stripslashes($_GET['s'])) : '';
-        $results = array();
-
-        if (!empty($search_query)) {
-            $safe_query = '%' . $wpdb->esc_like($search_query) . '%';
-            $sql = $wpdb->prepare("SELECT * FROM $table_name WHERE title LIKE %s OR content LIKE %s OR location LIKE %s OR tags LIKE %s OR keywords LIKE %s", $safe_query, $safe_query, $safe_query, $safe_query, $safe_query);
-            $results = $wpdb->get_results($sql);
-        }
-
-        ?>
-        <div class="wrap">
-            <h1>Content Search</h1>
-            <p>Search all indexed pages for specific terms.</p>
-            <div style="background: white; padding: 20px; border: 1px solid #ccd0d4; border-radius: 4px; margin: 20px 0;">
-                <form method="get" action="">
-                    <input type="hidden" name="page" value="ai-chatbot-content-search" />
-                    <p class="search-box">
-                        <label class="screen-reader-text" for="search-input">Search Indexed Content:</label>
-                        <input type="search" id="search-input" name="s" value="<?php echo esc_attr($search_query); ?>" />
-                        <input type="submit" id="search-submit" class="button" value="Search" />
-                    </p>
-                </form>
-            </div>
-            
-            <?php if (!empty($search_query) && empty($results)) : ?>
-                <div class="notice notice-warning">
-                    <p>No results found for "<?php echo esc_html($search_query); ?>".</p>
-                </div>
-            <?php elseif (!empty($results)) : ?>
-                <div style="background: white; padding: 20px; border: 1px solid #ccd0d4; border-radius: 4px; margin: 20px 0;">
-                    <h2>Search Results (<?php echo count($results); ?>)</h2>
-                    <table class="wp-list-table widefat fixed striped">
-                        <thead>
-                            <tr>
-                                <th style="width: 20%;">Title</th>
-                                <th style="width: 8%;">Type</th>
-                                <th style="width: 10%;">Location</th>
-                                <th style="width: 15%;">Tags</th>
-                                <th style="width: 25%;">Keywords</th>
-                                <th style="width: 15%;">Date</th>
-                                <th style="width: 7%;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($results as $result) : ?>
-                                <tr>
-                                    <td><?php echo esc_html($result->title); ?></td>
-                                    <td><?php echo esc_html(ucfirst($result->post_type)); ?></td>
-                                    <td><?php echo esc_html($result->location); ?></td>
-                                    <td><?php echo esc_html($result->tags); ?></td>
-                                    <td><?php echo esc_html($result->keywords); ?></td>
-                                    <td><?php echo esc_html(date('M j, Y', strtotime($result->indexed_date))); ?></td>
-                                    <td><a href="<?php echo esc_url(admin_url('admin.php?page=ai-chatbot-edit-indexed-content&post_id=' . $result->post_id)); ?>">Edit</a></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-        </div>
-        <?php
+        include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/content-search.php';
     }
     
     private function get_indexed_content_count() {
@@ -589,482 +380,27 @@ Website Content:
     }
     
     public function model_selector_page() {
-        // Handle model saving via GET parameter
-        if (isset($_GET['save_model']) && !empty($_GET['save_model'])) {
-            $model = sanitize_text_field($_GET['save_model']);
-            update_option('ai_chatbot_model', $model);
-            echo '<div class="notice notice-success is-dismissible"><p><strong>Success!</strong> Model saved: ' . esc_html($model) . '</p></div>';
-        }
-        ?>
-        <div class="wrap">
-            <h1>🔧 Claude Model Selector</h1>
-            
-            <div style="background: white; padding: 30px; border: 1px solid #ccd0d4; border-radius: 4px; margin: 20px 0;">
-                <h2>Current Configuration</h2>
-                <table class="form-table">
-                    <tr>
-                        <th>Plugin Version:</th>
-                        <td><?php echo AI_CHATBOT_VERSION; ?></td>
-                    </tr>
-                    <tr>
-                        <th>Current Model:</th>
-                        <td><strong><?php echo esc_html(get_option('ai_chatbot_model', 'Not Set')); ?></strong></td>
-                    </tr>
-                    <tr>
-                        <th>API Key Status:</th>
-                        <td><?php echo !empty(get_option('ai_chatbot_api_key', '')) ? '<span style="color: green;">✅ Configured</span>' : '<span style="color: red;">❌ Not Set'; ?></span></td>
-                    </tr>
-                </table>
-                
-                <?php if (empty(get_option('ai_chatbot_api_key', ''))): ?>
-                <div class="notice notice-warning">
-                    <p><strong>Warning:</strong> Please set your Claude API key in <a href="<?php echo admin_url('admin.php?page=ai-chatbot-settings'); ?>">Settings</a> before testing models.</p>
-                </div>
-                <?php endif; ?>
-            </div>
-            
-            <div style="background: white; padding: 30px; border: 1px solid #ccd0d4; border-radius: 4px; margin: 20px 0;">
-                <h2>Step 1: Get Available Models</h2>
-                <p>Click this button to query Claude API for all currently available models:</p>
-                <button type="button" id="get-models" class="button button-primary button-large" style="background: #28a745; border-color: #28a745;">
-                    📋 Get Available Claude Models
-                </button>
-                
-                <h2 style="margin-top: 30px;">Step 2: Test API Connection</h2>
-                <p>Test your current model configuration:</p>
-                <button type="button" id="test-api" class="button button-large">
-                    🌐 Test Current Model
-                </button>
-                
-                <div id="results" style="margin-top: 30px; padding: 20px; background: #f1f1f1; border: 1px solid #ddd; border-radius: 4px; min-height: 100px;">
-                    <h3>Results</h3>
-                    <p id="results-content"><em>Click a button above to see results...</em></p>
-                </div>
-            </div>
-        </div>
-        
-        <script>
-        jQuery(document).ready(function($) {
-            console.log('Model Selector Page: JavaScript loaded');
-            
-            function showResult(message, type) {
-                const colors = {
-                    success: { bg: '#d4edda', border: '#c3e6cb', text: '#155724' },
-                    error: { bg: '#f8d7da', border: '#f5c6cb', text: '#721c24' },
-                    info: { bg: '#d1ecf1', border: '#bee5eb', text: '#0c5460' }
-                };
-                
-                const color = colors[type] || colors.info;
-                $('#results-content').html(message);
-                $('#results').css({
-                    'background-color': color.bg,
-                    'border-color': color.border,
-                    'color': color.text
-                });
-            }
-            
-            $('#get-models').click(function() {
-                showResult('🔄 Fetching available Claude models from API...', 'info');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: { action: 'get_claude_models' },
-                    success: function(response) {
-                        if (response && response.success) {
-                            let html = '<strong>✅ Available Models Found:</strong><br><br>';
-                            if (response.data.models && response.data.models.length > 0) {
-                                html += '<select id="model-selector" style="width: 100%; padding: 10px; margin: 10px 0; font-size: 16px;">';
-                                response.data.models.forEach(function(model) {
-                                    const selected = model.id === '<?php echo esc_js(get_option('ai_chatbot_model', '')); ?>' ? ' selected' : '';
-                                    html += '<option value="' + model.id + '"' + selected + '>' + model.id + '</option>';
-                                });
-                                html += '</select><br>';
-                                html += '<button type="button" id="save-model" class="button button-primary" style="margin-top: 10px; padding: 10px 20px;">💾 Save Selected Model</button>';
-                                
-                                if (response.data.note) {
-                                    html += '<br><br><small><em>Note: ' . response.data.note . '</em></small>';
-                                }
-                                html += '<br><small>Total models: ' . response.data.models.length . '</small>';
-                            } else {
-                                html += '<em>No models found in API response.</em>';
-                            }
-                            showResult(html, 'success');
-                        } else {
-                            const errorMsg = response && response.data ? response.data : 'Unknown error occurred';
-                            showResult('<strong>❌ Failed to get models:</strong><br>' + errorMsg, 'error');
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        showResult('<strong>❌ Request failed:</strong><br>Status: ' + status + '<br>Error: ' + error + '<br>HTTP Code: ' . xhr.status, 'error');
-                    }
-                });
-            });
-            
-            $(document).on('click', '#save-model', function() {
-                const selectedModel = $('#model-selector').val();
-                if (!selectedModel) {
-                    alert('Please select a model first.');
-                    return;
-                }
-                
-                showResult('💾 Saving model: ' + selectedModel + '...', 'info');
-                
-                window.location.href = '<?php echo admin_url('admin.php?page=ai-chatbot-models&save_model='); ?>' + encodeURIComponent(selectedModel);
-            });
-            
-            $('#test-api').click(function() {
-                showResult('🌐 Testing Claude API with current model...', 'info');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: { action: 'test_chatbot_connection' },
-                    success: function(response) {
-                        if (response && response.success) {
-                            const model = response.data.model_used || 'Unknown';
-                            const text = response.data.response_text || 'No response';
-                            showResult('✅ <strong>Claude API: SUCCESS</strong><br>Model: ' + model + '<br>Response: ' + text, 'success');
-                        } else {
-                            const errorMsg = response && response.data ? response.data : 'Unknown error';
-                            showResult('❌ <strong>Claude API: FAILED</strong><br>Error: ' + errorMsg, 'error');
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        showResult('❌ <strong>Claude API: REQUEST FAILED</strong><br>Status: ' + status + '<br>Error: ' + error + '<br>HTTP Code: ' . xhr.status, 'error');
-                    }
-                });
-            });
-        });
-        </script>
-        <?php
+        include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/model-selector.php';
     }
     
     public function admin_page() {
-        ?>
-        <div class="wrap">
-            <h1>AI Content Chatbot</h1>
-            
-            <div style="background: #d4edda; border: 1px solid #c3e6cb; padding: 20px; margin: 20px 0; border-radius: 4px;">
-                <h2>✅ Plugin Status</h2>
-                <table class="form-table">
-                    <tr>
-                        <th>Version:</th>
-                        <td><?php echo AI_CHATBOT_VERSION; ?></td>
-                    </tr>
-                    <tr>
-                        <th>PHP Version:</th>
-                        <td><?php echo PHP_VERSION; ?></td>
-                    </tr>
-                    <tr>
-                        <th>Current Model:</th>
-                        <td><strong><?php echo esc_html(get_option('ai_chatbot_model', 'Not Set')); ?></strong></td>
-                    </tr>
-                    <tr>
-                        <th>API Key:</th>
-                        <td><?php echo !empty(get_option('ai_chatbot_api_key', '')) ? '✅ Configured' : '❌ Not Set'; ?></span></td>
-                    </tr>
-                </table>
-                
-                <p><a href="<?php echo admin_url('admin.php?page=ai-chatbot-models'); ?>" class="button button-primary button-large">🔧 Open Model Selector</a></p>
-            </div>
-            
-            <div style="background: white; border: 2px solid #007cba; padding: 30px; margin: 20px 0; border-radius: 8px;">
-                <h2>🧪 Quick Tests</h2>
-                
-                <div style="margin: 20px 0;">
-                    <h3>Test WordPress AJAX</h3>
-                    <button type="button" id="test-wp-ajax" class="button button-large" style="background: #28a745; color: white; padding: 15px 30px; font-size: 16px;">
-                        🔍 Test WordPress AJAX
-                    </button>
-                </div>
-                
-                <div style="margin: 20px 0;">
-                    <h3>Test Claude API</h3>
-                    <button type="button" id="test-claude-api" class="button button-large button-primary" style="padding: 15px 30px; font-size: 16px;">
-                        🌐 Test Claude API
-                    </button>
-                </div>
-                
-                <div id="test-results" style="margin-top: 30px; padding: 20px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; min-height: 100px;">
-                    <h3>📋 Test Results</h3>
-                    <p id="result-text">Click a test button above to see results...</p>
-                </div>
-            </div>
-        </div>
-        
-        <script>
-        jQuery(document).ready(function($) {
-            function showResult(message, type) {
-                const colors = {
-                    success: { bg: '#d1fae5', border: '#10b981', text: '#065f46' },
-                    error: { bg: '#fee2e2', border: '#ef4444', text: '#991b1b' },
-                    info: { bg: '#dbeafe', border: '#3b82f6', text: '#1e3a8a' }
-                };
-                
-                const color = colors[type] || colors.info;
-                $('#result-text').html(message);
-                $('#test-results').css({
-                    'background-color': color.bg,
-                    'border-color': color.border,
-                    'color': color.text
-                });
-            }
-            
-            $('#test-wp-ajax').click(function() {
-                showResult('🔄 Testing WordPress AJAX...', 'info');
-                
-                $.post(ajaxurl, {
-                    action: 'heartbeat',
-                    data: { test: 'basic' }
-                }).done(function(response) {
-                    showResult('✅ <strong>WordPress AJAX: SUCCESS</strong><br>Your WordPress can handle AJAX requests properly.', 'success');
-                }).fail(function(xhr, status, error) {
-                    showResult('❌ <strong>WordPress AJAX: FAILED</strong><br>Error: ' + status + ' - ' + error + '<br>HTTP Code: ' . xhr.status, 'error');
-                });
-            });
-            
-            $('#test-claude-api').click(function() {
-                showResult('🔄 Testing Claude API connection...', 'info');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: { action: 'test_chatbot_connection' },
-                    success: function(response) {
-                        if (response && response.success) {
-                            const model = response.data.model_used || 'Unknown';
-                            const text = response.data.response_text || 'No response';
-                            showResult('✅ <strong>Claude API: SUCCESS</strong><br>Model: ' + model + '<br>Response: ' + text, 'success');
-                        } else {
-                            const errorMsg = response && response.data ? response.data : 'Unknown error';
-                            showResult('❌ <strong>Claude API: FAILED</strong><br>Error: ' + errorMsg, 'error');
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        showResult('❌ <strong>Claude API: REQUEST FAILED</strong><br>Status: ' + status + '<br>Error: ' + error + '<br>HTTP Code: ' . xhr.status, 'error');
-                    }
-                });
-            });
-        });
-        </script>
-        <?php
+        include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/admin-dashboard.php';
     }
     
     public function settings_page() {
-        if (isset($_POST['submit'])) {
-            update_option('ai_chatbot_enabled', isset($_POST['ai_chatbot_enabled']) ? '1' : '0');
-            update_option('ai_chatbot_api_key', sanitize_text_field($_POST['ai_chatbot_api_key']));
-            update_option('ai_chatbot_model', sanitize_text_field($_POST['ai_chatbot_model']));
-            update_option('ai_chatbot_welcome_message', sanitize_textarea_field($_POST['ai_chatbot_welcome_message']));
-            update_option('ai_chatbot_primary_color', sanitize_hex_color($_POST['ai_chatbot_primary_color']));
-            update_option('ai_chatbot_system_prompt', sanitize_textarea_field($_POST['ai_chatbot_system_prompt']));
-            
-            echo '<div class="notice notice-success"><p>Settings saved!</p></div>';
-        }
-        
-        ?>
-        <div class="wrap">
-            <h1>Chatbot Settings</h1>
-            <form method="post" action="">
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">Enable Chatbot</th>
-                        <td>
-                            <input type="checkbox" id="ai_chatbot_enabled" name="ai_chatbot_enabled" value="1" <?php checked(get_option('ai_chatbot_enabled', '1'), '1'); ?> />
-                            <label for="ai_chatbot_enabled">Show chatbot on frontend</label>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Claude API Key</th>
-                        <td>
-                            <input type="password" name="ai_chatbot_api_key" value="<?php echo esc_attr(get_option('ai_chatbot_api_key', '')); ?>" class="regular-text" />
-                            <p class="description">Get your API key from <a href="https://console.anthropic.com" target="_blank">Anthropic Console</a></p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Claude Model</th>
-                        <td>
-                            <input type="text" name="ai_chatbot_model" value="<?php echo esc_attr(get_option('ai_chatbot_model', 'claude-3-5-sonnet-20241022')); ?>" class="regular-text" />
-                            <p class="description">Use the <a href="<?php echo admin_url('admin.php?page=ai-chatbot-models'); ?>">Model Selector</a> to find current models</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Welcome Message</th>
-                        <td>
-                            <textarea name="ai_chatbot_welcome_message" rows="3" cols="50"><?php echo esc_textarea(get_option('ai_chatbot_welcome_message', 'Hi! How can I help you today?')); ?></textarea>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Primary Color</th>
-                        <td>
-                            <input type="color" name="ai_chatbot_primary_color" value="<?php echo esc_attr(get_option('ai_chatbot_primary_color', '#007cba')); ?>" />
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">System Prompt</th>
-                        <td>
-                            <textarea name="ai_chatbot_system_prompt" rows="8" cols="50" class="large-text code"><?php echo esc_textarea(get_option('ai_chatbot_system_prompt')); ?></textarea>
-                            <p class="description">This is the core instruction set for the AI. Use <code>[SITE_NAME]</code> and <code>[RELEVANT_CONTENT]</code> as dynamic placeholders.</p>
-                        </td>
-                    </tr>
-                </table>
-                <?php submit_button(); ?>
-            </form>
-        </div>
-        <?php
+        include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/settings.php';
     }
 
     public function chat_window_page() {
-        if (isset($_POST['submit'])) {
-            update_option('ai_chatbot_window_title', sanitize_text_field($_POST['ai_chatbot_window_title']));
-            update_option('ai_chatbot_window_width', intval($_POST['ai_chatbot_window_width']));
-            update_option('ai_chatbot_window_height', intval($_POST['ai_chatbot_window_height']));
-            update_option('ai_chatbot_title_height', intval($_POST['ai_chatbot_title_height']));
-            update_option('ai_chatbot_reply_height', intval($_POST['ai_chatbot_reply_height']));
-            update_option('ai_chatbot_input_spacing', intval($_POST['ai_chatbot_input_spacing']));
-            echo '<div class="notice notice-success"><p>Chat window settings saved!</p></div>';
-        }
-
-        $current_title = get_option('ai_chatbot_window_title');
-        $current_width = get_option('ai_chatbot_window_width');
-        $current_height = get_option('ai_chatbot_window_height');
-        $current_title_height = get_option('ai_chatbot_title_height');
-        $current_reply_height = get_option('ai_chatbot_reply_height');
-        $current_input_spacing = get_option('ai_chatbot_input_spacing');
-        
-        ?>
-        <div class="wrap">
-            <h1>Chat Window Settings</h1>
-            <p>Customize the appearance of the front-end chat window.</p>
-            <form method="post" action="">
-                <table class="form-table">
-                    <tr>
-                        <th scope="row"><label for="ai_chatbot_window_title">Chat Window Title</label></th>
-                        <td>
-                            <input type="text" id="ai_chatbot_window_title" name="ai_chatbot_window_title" value="<?php echo esc_attr($current_title); ?>" class="regular-text" />
-                            <p class="description">The title that appears at the top of the chat window.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="ai_chatbot_window_width">Window Width (px)</label></th>
-                        <td>
-                            <input type="number" id="ai_chatbot_window_width" name="ai_chatbot_window_width" value="<?php echo esc_attr($current_width); ?>" class="regular-text" min="250" max="600" />
-                            <p class="description">The width of the chat window in pixels. (e.g., 350)</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="ai_chatbot_window_height">Window Height (px)</label></th>
-                        <td>
-                            <input type="number" id="ai_chatbot_window_height" name="ai_chatbot_window_height" value="<?php echo esc_attr($current_height); ?>" class="regular-text" min="300" max="800" />
-                            <p class="description">The height of the chat window in pixels. (e.g., 450)</p>
-                        </td>
-                    </tr>
-                     <tr>
-                        <th scope="row"><label for="ai_chatbot_title_height">Title Bar Height (px)</label></th>
-                        <td>
-                            <input type="number" id="ai_chatbot_title_height" name="ai_chatbot_title_height" value="<?php echo esc_attr($current_title_height); ?>" class="regular-text" min="40" max="100" />
-                            <p class="description">The height of the header area with the title and close button.</p>
-                        </td>
-                    </tr>
-                     <tr>
-                        <th scope="row"><label for="ai_chatbot_reply_height">Reply Area Height (px)</label></th>
-                        <td>
-                            <input type="number" id="ai_chatbot_reply_height" name="ai_chatbot_reply_height" value="<?php echo esc_attr($current_reply_height); ?>" class="regular-text" min="150" max="600" />
-                            <p class="description">The height of the message display area. Adjust this to balance with other elements.</p>
-                        </td>
-                    </tr>
-                     <tr>
-                        <th scope="row"><label for="ai_chatbot_input_spacing">Input Area Spacing (px)</label></th>
-                        <td>
-                            <input type="number" id="ai_chatbot_input_spacing" name="ai_chatbot_input_spacing" value="<?php echo esc_attr($current_input_spacing); ?>" class="regular-text" min="0" max="50" />
-                            <p class="description">The space below the message input box. This affects the overall height calculation.</p>
-                        </td>
-                    </tr>
-                </table>
-                <?php submit_button('Save Settings'); ?>
-            </form>
-        </div>
-        <?php
+        include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/chat-window.php';
     }
 
     public function excluded_keywords_page() {
-        if (isset($_POST['submit'])) {
-            // Sanitize and update the option
-            $excluded_keywords = sanitize_textarea_field($_POST['ai_chatbot_excluded_keywords']);
-            update_option('ai_chatbot_excluded_keywords', $excluded_keywords);
-            echo '<div class="notice notice-success"><p>Excluded keywords saved!</p></div>';
-        }
-        $current_excluded_keywords = get_option('ai_chatbot_excluded_keywords', '');
-        ?>
-        <div class="wrap">
-            <h1>Excluded Keywords</h1>
-            <p>Enter a comma-separated list of words to be excluded from the keyword extraction process.</p>
-            <form method="post" action="">
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">Excluded Keywords</th>
-                        <td>
-                            <textarea name="ai_chatbot_excluded_keywords" rows="5" cols="50" class="large-text code"><?php echo esc_textarea($current_excluded_keywords); ?></textarea>
-                            <p class="description">Separate words with a comma (e.g., `the, and, or, pdf-embedder`).</p>
-                        </td>
-                    </tr>
-                </table>
-                <?php submit_button(); ?>
-            </form>
-        </div>
-        <?php
+        include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/excluded-keywords.php';
     }
 
     public function edit_indexed_content_page() {
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'chatbot_content_index';
-        $post_id = isset($_GET['post_id']) ? intval($_GET['post_id']) : 0;
-        $indexed_content = null;
-    
-        if ($post_id) {
-            $indexed_content = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE post_id = %d", $post_id));
-        }
-    
-        if (!$indexed_content) {
-            echo '<div class="wrap"><h1>Error</h1><p>No content found for this ID.</p></div>';
-            return;
-        }
-    
-        if (isset($_POST['submit_keywords'])) {
-            $new_keywords = sanitize_textarea_field($_POST['new_keywords']);
-            $wpdb->update(
-                $table_name,
-                ['keywords' => $new_keywords],
-                ['post_id' => $post_id],
-                ['%s'],
-                ['%d']
-            );
-            echo '<div class="notice notice-success"><p>Keywords updated successfully!</p></div>';
-            $indexed_content->keywords = $new_keywords; // Update the displayed keywords
-        }
-    
-        ?>
-        <div class="wrap">
-            <h1>Edit Keywords</h1>
-            <p>Editing keywords for: <strong><?php echo esc_html($indexed_content->title); ?></strong></p>
-            <p>URL: <a href="<?php echo esc_url($indexed_content->url); ?>" target="_blank"><?php echo esc_url($indexed_content->url); ?></a></p>
-            <form method="post" action="">
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">Keywords</th>
-                        <td>
-                            <textarea name="new_keywords" rows="5" cols="50" class="large-text code"><?php echo esc_textarea($indexed_content->keywords); ?></textarea>
-                            <p class="description">Enter a comma-separated list of keywords. These are used to find relevant content for the chatbot.</p>
-                        </td>
-                    </tr>
-                </table>
-                <input type="hidden" name="post_id" value="<?php echo $post_id; ?>">
-                <?php submit_button('Save Keywords', 'primary', 'submit_keywords'); ?>
-            </form>
-            <a href="<?php echo esc_url(admin_url('admin.php?page=ai-chatbot-content')); ?>" class="button">← Back to Content Index</a>
-        </div>
-        <?php
+        include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/edit-indexed-content.php';
     }
 
     public function get_claude_models() {
@@ -1387,6 +723,49 @@ Website Content:
         ));
 
         add_action('wp_footer', array($this, 'render_chatbot_widget'), 999);
+    }
+    
+    public function enqueue_admin_scripts($hook) {
+        // Only load on our admin pages
+        if (strpos($hook, 'ai-chatbot') === false) {
+            return;
+        }
+        
+        wp_enqueue_script('jquery');
+        
+        // Enqueue admin JS based on page
+        if ($hook === 'toplevel_page_ai-chatbot') {
+            wp_enqueue_script(
+                'ai-chatbot-admin-dashboard',
+                AI_CHATBOT_PLUGIN_URL . 'assets/js/admin/admin-dashboard.js',
+                array('jquery'),
+                AI_CHATBOT_VERSION,
+                true
+            );
+        } elseif ($hook === 'ai-chatbot_page_ai-chatbot-models') {
+            wp_enqueue_script(
+                'ai-chatbot-model-selector',
+                AI_CHATBOT_PLUGIN_URL . 'assets/js/admin/model-selector.js',
+                array('jquery'),
+                AI_CHATBOT_VERSION,
+                true
+            );
+        } elseif ($hook === 'ai-chatbot_page_ai-chatbot-content') {
+            wp_enqueue_script(
+                'ai-chatbot-content-index',
+                AI_CHATBOT_PLUGIN_URL . 'assets/js/admin/content-index.js',
+                array('jquery'),
+                AI_CHATBOT_VERSION,
+                true
+            );
+        }
+        
+        // Localize admin data
+        wp_localize_script('jquery', 'aiChatbotAdmin', array(
+            'nonce' => wp_create_nonce('ai_chatbot_admin_nonce'),
+            'currentModel' => get_option('ai_chatbot_model', ''),
+            'saveModelUrl' => admin_url('admin.php?page=ai-chatbot-models&save_model=')
+        ));
     }
     
     public function render_chatbot_widget() {
