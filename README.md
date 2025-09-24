@@ -28,6 +28,12 @@ A powerful WordPress plugin that creates an intelligent chatbot powered by Claud
 - **Content Search**: Built-in search functionality to test content indexing
 - **Admin Dashboard**: Comprehensive management interface
 
+### 🔍 Debugging & Analytics
+- **Interaction Logging**: Complete database logging of all chatbot interactions
+- **Error Tracking**: Detailed error messages and response time monitoring
+- **Usage Analytics**: Track user queries, success rates, and performance metrics
+- **Keyword Management**: Visual interface for managing excluded keywords with frequency counts
+
 ## Installation
 
 1. **Download** the plugin files to your WordPress `/wp-content/plugins/` directory
@@ -165,6 +171,17 @@ For issues, feature requests, or questions:
 4. Contact the plugin developer for additional support
 
 ## Changelog
+
+### Version 1.8.0 - Major Feature Release
+- **🔍 Comprehensive Debugging System**: Added complete interaction logging with database storage
+- **📊 Admin Analytics Dashboard**: New "Interaction Logs" page with filtering, stats, and detailed views
+- **🛡️ Enhanced Error Handling**: Improved timeout handling (60s), exception catching, and error logging
+- **🚫 Fixed Keyword Exclusion**: Excluded keywords now properly work in both indexing and search
+- **🎯 Improved Search Algorithm**: Better phrase handling, stopword filtering, and relevance scoring
+- **🔗 Restored Page Linking**: Fixed chatbot responses to include clickable links to relevant content
+- **🎨 Enhanced Keyword Management**: Redesigned excluded keywords page with visual interface and frequency counts
+- **📝 Anti-Hallucination System**: Stricter system prompts and content validation to prevent AI from making up information
+- **⚡ Performance Improvements**: Optimized search queries and response times
 
 ### Version 1.7.4
 - Fixed page linking functionality in chatbot responses
