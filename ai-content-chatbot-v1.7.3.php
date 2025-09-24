@@ -1363,131 +1363,30 @@ Website Content:
         }
         
         wp_enqueue_script('jquery');
-        
-        wp_add_inline_style('wp-block-library', $this->get_chatbot_css());
-        
-        add_action('wp_footer', array($this, 'render_chatbot_widget'), 999);
-    }
-    
-    private function get_chatbot_css() {
-        $primary_color = get_option('ai_chatbot_primary_color', '#007cba');
-        
-        return "
-        #ai-chatbot-widget {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-        
-        #ai-chatbot-toggle {
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        
-        #ai-chatbot-toggle:hover {
-            transform: scale(1.05);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-        }
-        
-        #ai-chatbot-container {
-            animation: slideUp 0.3s ease;
-        }
-        
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .chat-message {
-            margin-bottom: 15px;
-            word-wrap: break-word;
-        }
-        
-        .chat-message.user {
-            text-align: right;
-        }
-        
-        .chat-message.bot {
-            text-align: left;
-        }
-        
-        .message-bubble {
-            display: inline-block;
-            max-width: 80%;
-            padding: 10px 15px;
-            border-radius: 18px;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-        
-        .message-bubble.user {
-            background: {$primary_color};
-            color: white;
-        }
-        
-        .message-bubble.bot {
-            background: #f0f0f0;
-            color: #333;
-        }
-        
-        #chat-input {
-            border: 2px solid #e0e0e0;
-            transition: border-color 0.3s ease;
-        }
-        
-        #chat-input:focus {
-            outline: none;
-            border-color: {$primary_color};
-        }
-        
-        #send-button {
-            background: {$primary_color};
-            border: none;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 50%;
-            cursor: pointer;
-            margin-left: 10px;
-            transition: background-color 0.3s ease;
-        }
-        
-        #send-button:hover {
-            opacity: 0.9;
-        }
-        
-        #send-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .typing-indicator {
-            display: none;
-            padding: 10px 15px;
-            background: #f0f0f0;
-            border-radius: 18px;
-            margin-bottom: 15px;
-            font-style: italic;
-            color: #666;
-        }
-        
-        .chat-title {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
 
-        #ai-chatbot-input-container {
-            padding: 15px 20px;
-            border-top: 1px solid #eee;
-            background: #fafafa;
-            display: flex;
-            align-items: center;
-        }
-        ";
+        // Enqueue frontend assets
+        wp_enqueue_style(
+            'ai-chatbot-frontend',
+            AI_CHATBOT_PLUGIN_URL . 'assets/css/chatbot.css',
+            array(),
+            AI_CHATBOT_VERSION
+        );
+
+        wp_enqueue_script(
+            'ai-chatbot-frontend',
+            AI_CHATBOT_PLUGIN_URL . 'assets/js/chatbot.js',
+            array('jquery'),
+            AI_CHATBOT_VERSION,
+            true
+        );
+
+        // Localize data for AJAX
+        wp_localize_script('ai-chatbot-frontend', 'AIChatbot', array(
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('chatbot_frontend_nonce')
+        ));
+
+        add_action('wp_footer', array($this, 'render_chatbot_widget'), 999);
     }
     
     public function render_chatbot_widget() {
@@ -1502,7 +1401,7 @@ Website Content:
         $input_spacing = get_option('ai_chatbot_input_spacing', '20');
 
         ?>
-        <div id="ai-chatbot-widget" style="position: fixed; bottom: 20px; right: 20px; z-index: 999999;">
+        <div id="ai-chatbot-widget" style="position: fixed; bottom: 20px; right: 20px; z-index: 999999; --ai-chatbot-primary-color: <?php echo esc_attr($primary_color); ?>;">
             <div id="ai-chatbot-toggle" style="width: 60px; height: 60px; border-radius: 50%; background: <?php echo esc_attr($primary_color); ?>; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">
                 💬
             </div>
@@ -1535,143 +1434,6 @@ Website Content:
             </div>
         </div>
         
-        <script>
-        jQuery(document).ready(function($) {
-            var chatOpen = false;
-            var isProcessing = false;
-            
-            // Toggle chat
-            $('#ai-chatbot-toggle, #close-chat').click(function() {
-                chatOpen = !chatOpen;
-                $('#ai-chatbot-container').toggle();
-                if (chatOpen) {
-                    $('#chat-input').focus();
-                }
-            });
-            
-            // Send message function
-            function sendMessage() {
-                if (isProcessing) return;
-                
-                var message = $('#chat-input').val().trim();
-                if (!message) return;
-                
-                // Add user message to chat
-                addMessage(message, 'user');
-                $('#chat-input').val('');
-                
-                // Show typing indicator
-                showTyping();
-                isProcessing = true;
-                $('#send-button').prop('disabled', true);
-                
-                // Send AJAX request
-                $.ajax({
-                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
-                    type: 'POST',
-                    data: {
-                        action: 'chatbot_query',
-                        message: message,
-                        nonce: '<?php echo wp_create_nonce('chatbot_frontend_nonce'); ?>'
-                    },
-                    success: function(response) {
-                        hideTyping();
-                        if (response && response.success && response.data.response) {
-                            addMessage(response.data.response, 'bot');
-                        } else {
-                            addMessage('Sorry, I encountered an error. Please try again.', 'bot');
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        hideTyping();
-                        console.error('Chat error:', status, error);
-                        addMessage('Sorry, I\'m having trouble connecting. Please try again later.', 'bot');
-                    },
-                    complete: function() {
-                        isProcessing = false;
-                        $('#send-button').prop('disabled', false);
-                        $('#chat-input').focus();
-                    }
-                });
-            }
-            
-            // Add message to chat
-            function addMessage(text, sender) {
-                var messageHtml = '';
-                if (sender === 'bot') {
-                    // Regex to find Markdown links like [text](url)
-                    const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-                    const parts = text.split(markdownLinkRegex);
-                    
-                    let htmlContent = '';
-                    for (let i = 0; i < parts.length; i++) {
-                        if (i % 3 === 1) {
-                            // This is the link text
-                            const linkText = parts[i];
-                            const linkUrl = parts[i + 1];
-                            htmlContent += `<a href="${linkUrl}" target="_blank" style="text-decoration: underline; color: inherit;">${linkText}</a>`;
-                            i++; // Skip the next part (the URL)
-                        } else {
-                            // This is regular text
-                            htmlContent += escapeHtml(parts[i]);
-                        }
-                    }
-                    messageHtml = `<div class="chat-message ${sender}"><div class="message-bubble ${sender}">${htmlContent}</div></div>`;
-                } else {
-                    messageHtml = `<div class="chat-message ${sender}"><div class="message-bubble ${sender}">${escapeHtml(text)}</div></div>`;
-                }
-                
-                $('#chat-messages').append(messageHtml);
-                scrollToBottom();
-            }
-            
-            // Show/hide typing indicator
-            function showTyping() {
-                $('#typing-indicator').show();
-                scrollToBottom();
-            }
-            
-            function hideTyping() {
-                $('#typing-indicator').hide();
-            }
-            
-            // Scroll to bottom of messages
-            function scrollToBottom() {
-                var messagesContainer = $('#chat-messages')[0];
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-            
-            // Escape HTML
-            function escapeHtml(text) {
-                var div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            }
-            
-            // Event listeners
-            $('#send-button').click(sendMessage);
-            
-            $('#chat-input').keypress(function(e) {
-                if (e.which === 13 && !e.shiftKey) { // Enter key
-                    e.preventDefault();
-                    sendMessage();
-                }
-            });
-            
-            // Prevent chat from closing when clicking inside
-            $('#ai-chatbot-container').click(function(e) {
-                e.stopPropagation();
-            });
-            
-            // Close chat when clicking outside
-            $(document).click(function(e) {
-                if (chatOpen && !$(e.target).closest('#ai-chatbot-widget').length) {
-                    chatOpen = false;
-                    $('#ai-chatbot-container').hide();
-                }
-            });
-        });
-        </script>
         <?php
     }
 }
