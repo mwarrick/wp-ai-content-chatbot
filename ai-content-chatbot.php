@@ -597,8 +597,8 @@ Website Content:
         }
     }
     
-    // Updated to use location and tags for a more relevant search
-    private function search_indexed_content($query) {
+	// Improved search: phrase handling, stopword filtering, OR matching with relevance scoring
+	private function search_indexed_content($query) {
         global $wpdb;
         $table_name = $wpdb->prefix . 'chatbot_content_index';
         
@@ -606,50 +606,71 @@ Website Content:
             return "No indexed content available.";
         }
         
-        $search_terms = explode(' ', strtolower($query));
-        $where_conditions = array();
-
-        // Add 'force-search' words that should always be included
-        $force_search_words = array('contact', 'about', 'services', 'blog', 'home', 'powerbi');
-
-        // Build base WHERE clause for keywords, content and title
-        foreach ($search_terms as $term) {
-            $term = trim($term);
-            if (strlen($term) > 2 || in_array($term, $force_search_words)) {
-                $safe_term = $wpdb->esc_like($term);
-                // Search in keywords, title, and content
-                $where_conditions[] = $wpdb->prepare("(LOWER(keywords) LIKE %s OR LOWER(title) LIKE %s OR LOWER(content) LIKE %s)", '%' . $safe_term . '%', '%' . $safe_term . '%', '%' . $safe_term . '%');
-            }
-        }
-        
-        $where_clause = implode(' AND ', $where_conditions);
-        
-        // Execute search based on available conditions
-        if (!empty($where_conditions)) {
-            $sql = "SELECT title, url, content FROM $table_name WHERE $where_clause ORDER BY indexed_date DESC LIMIT 5";
-            $results = $wpdb->get_results($sql);
-        } else {
-            // No specific keywords, fall back to simple, broad search.
-            $sql = "SELECT title, url, content FROM $table_name WHERE title LIKE %s OR content LIKE %s ORDER BY indexed_date DESC LIMIT 5";
-            $results = $wpdb->get_results($wpdb->prepare($sql, '%' . $wpdb->esc_like($query) . '%', '%' . $wpdb->esc_like($query) . '%'));
-        }
-        
-        if (empty($results)) {
-            // Secondary, broader search if primary search fails
-            $broad_where_conditions = array();
-            foreach ($search_terms as $term) {
-                $term = trim($term);
-                if (strlen($term) > 2 || in_array($term, $force_search_words)) {
-                    $safe_term = $wpdb->esc_like($term);
-                    $broad_where_conditions[] = $wpdb->prepare("(LOWER(keywords) LIKE %s OR LOWER(title) LIKE %s OR LOWER(content) LIKE %s)", '%' . $safe_term . '%', '%' . $safe_term . '%', '%' . $safe_term . '%');
-                }
-            }
-            if (!empty($broad_where_conditions)) {
-                $broad_where_clause = implode(' OR ', $broad_where_conditions);
-                $sql = "SELECT title, url, content FROM $table_name WHERE $broad_where_clause ORDER BY indexed_date DESC LIMIT 5";
-                $results = $wpdb->get_results($sql);
-            }
-        }
+		$raw_query = trim(strtolower($query));
+		$terms = array();
+		$phrases = array();
+		
+		// Extract quoted phrases
+		if (preg_match_all('/"([^"]+)"|\'([^\']+)\'/u', $raw_query, $matches)) {
+			foreach ($matches[1] as $m) { if (!empty($m)) { $phrases[] = trim($m); } }
+			foreach ($matches[2] as $m) { if (!empty($m)) { $phrases[] = trim($m); } }
+			$raw_query = preg_replace('/"([^"]+)"|\'([^\']+)\'/u', ' ', $raw_query);
+		}
+		
+		// Tokenize remaining text
+		$tokens = preg_split('/[^a-z0-9\-\+]+/u', $raw_query, -1, PREG_SPLIT_NO_EMPTY);
+		
+		// Common stopwords to ignore in matching
+		$stop_words = array('a','about','above','after','again','against','all','am','an','and','any','are','as','at','be','because','been','before','being','below','between','both','but','by','did','do','does','doing','down','during','each','few','for','from','further','had','has','have','having','he','her','here','hers','herself','him','himself','his','how','i','if','in','into','is','it','its','itself','me','more','most','my','myself','no','nor','not','of','off','on','once','only','or','other','our','ours','ourselves','out','over','own','same','she','should','so','some','such','than','that','the','their','theirs','them','themselves','then','there','these','they','this','those','through','to','too','under','until','up','very','was','we','were','what','when','where','which','while','who','whom','why','with','you','your','yours','yourself','yourselves');
+		
+		foreach ($tokens as $t) {
+			$t = trim($t);
+			if ($t === '') { continue; }
+			if (strlen($t) <= 2 && $t !== 'bi') { continue; }
+			if (in_array($t, $stop_words, true)) { continue; }
+			$terms[] = $t;
+		}
+		
+		// Special handling for "power bi" phrase and variant "powerbi"
+		$raw_no_space = preg_replace('/\s+/', ' ', trim(strtolower($query)));
+		if (strpos($raw_no_space, 'power bi') !== false) {
+			$phrases[] = 'power bi';
+			$terms[] = 'powerbi';
+			$terms[] = 'power';
+			$terms[] = 'bi';
+		}
+		
+		$conditions = array();
+		$score_parts = array();
+		
+		// Phrase conditions (score higher)
+		foreach ($phrases as $phrase) {
+			$safe = $wpdb->esc_like($phrase);
+			$conditions[] = $wpdb->prepare("(LOWER(keywords) LIKE %s OR LOWER(title) LIKE %s OR LOWER(tags) LIKE %s OR LOWER(content) LIKE %s)", '%' . $safe . '%', '%' . $safe . '%', '%' . $safe . '%', '%' . $safe . '%');
+			$score_parts[] = $wpdb->prepare("(CASE WHEN LOWER(title) LIKE %s THEN 6 ELSE 0 END) + (CASE WHEN LOWER(keywords) LIKE %s THEN 6 ELSE 0 END) + (CASE WHEN LOWER(tags) LIKE %s THEN 5 ELSE 0 END) + (CASE WHEN LOWER(content) LIKE %s THEN 2 ELSE 0 END)", '%' . $safe . '%', '%' . $safe . '%', '%' . $safe . '%', '%' . $safe . '%');
+		}
+		
+		// Term conditions (lower weight)
+		foreach ($terms as $term) {
+			$safe = $wpdb->esc_like($term);
+			$conditions[] = $wpdb->prepare("(LOWER(keywords) LIKE %s OR LOWER(title) LIKE %s OR LOWER(tags) LIKE %s OR LOWER(content) LIKE %s)", '%' . $safe . '%', '%' . $safe . '%', '%' . $safe . '%', '%' . $safe . '%');
+			$score_parts[] = $wpdb->prepare("(CASE WHEN LOWER(title) LIKE %s THEN 3 ELSE 0 END) + (CASE WHEN LOWER(keywords) LIKE %s THEN 4 ELSE 0 END) + (CASE WHEN LOWER(tags) LIKE %s THEN 3 ELSE 0 END) + (CASE WHEN LOWER(content) LIKE %s THEN 1 ELSE 0 END)", '%' . $safe . '%', '%' . $safe . '%', '%' . $safe . '%', '%' . $safe . '%');
+		}
+		
+		$results = array();
+		if (!empty($conditions)) {
+			$where_clause = implode(' OR ', $conditions);
+			$score_expr = implode(' + ', $score_parts);
+			$sql = "SELECT title, url, content, (" . $score_expr . ") AS relevance_score FROM $table_name WHERE $where_clause ORDER BY relevance_score DESC, indexed_date DESC LIMIT 5";
+			$results = $wpdb->get_results($sql);
+		}
+		
+		// Fallback: broad search on the full query string
+		if (empty($results)) {
+			$sql = "SELECT title, url, content FROM $table_name WHERE LOWER(title) LIKE %s OR LOWER(keywords) LIKE %s OR LOWER(tags) LIKE %s OR LOWER(content) LIKE %s ORDER BY indexed_date DESC LIMIT 5";
+			$like = '%' . $wpdb->esc_like(strtolower($query)) . '%';
+			$results = $wpdb->get_results($wpdb->prepare($sql, $like, $like, $like, $like));
+		}
         
         if (empty($results)) {
             return "No relevant content found.";
@@ -657,7 +678,7 @@ Website Content:
         
         // Format content with Markdown links for the AI to use
         $content_summary = "";
-        foreach ($results as $result) {
+		foreach ($results as $result) {
             $content_summary .= "[" . $result->title . "](" . $result->url . ")\n";
             $content_summary .= "Content: " . substr($result->content, 0, 500) . "...\n\n";
         }
