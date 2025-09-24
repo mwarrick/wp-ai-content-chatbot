@@ -45,16 +45,26 @@
 				messageHtml = '<div class="chat-message ' + sender + '" data-interaction-id="' + (interactionId || '') + '">';
 				messageHtml += '<div class="message-bubble ' + sender + '">' + htmlContent + '</div>';
 				if (interactionId) {
+					console.log('AI Chatbot: Adding feedback buttons for interaction ID:', interactionId); // Debug logging
 					messageHtml += '<div class="feedback-buttons" style="margin-top: 8px; text-align: right;">';
 					messageHtml += '<button class="feedback-btn helpful" data-interaction-id="' + interactionId + '" data-helpful="1" style="background: none; border: none; color: #28a745; cursor: pointer; font-size: 16px; margin-right: 10px;" title="This was helpful">👍</button>';
 					messageHtml += '<button class="feedback-btn not-helpful" data-interaction-id="' + interactionId + '" data-helpful="0" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px;" title="This was not helpful">👎</button>';
 					messageHtml += '</div>';
+				} else {
+					console.log('AI Chatbot: No interaction ID provided, skipping feedback buttons'); // Debug logging
 				}
 				messageHtml += '</div>';
 			} else {
 				messageHtml = '<div class="chat-message ' + sender + '"><div class="message-bubble ' + sender + '">' + escapeHtml(text) + '</div></div>';
 			}
 			$('#chat-messages').append(messageHtml);
+			
+			// Debug: Check if feedback buttons were created
+			if (interactionId) {
+				var $feedbackButtons = $('.feedback-btn[data-interaction-id="' + interactionId + '"]');
+				console.log('AI Chatbot: Feedback buttons created:', $feedbackButtons.length); // Debug logging
+			}
+			
 			scrollToBottom();
 		}
 
@@ -136,12 +146,18 @@
 
 		// Feedback button handlers
 		$(document).on('click', '.feedback-btn', function(e){
+			console.log('AI Chatbot: Feedback button clicked'); // Debug logging
 			e.preventDefault();
 			var $btn = $(this);
 			var interactionId = $btn.data('interaction-id');
 			var helpful = $btn.data('helpful');
 			
-			if (!interactionId) return;
+			console.log('AI Chatbot: Feedback button data:', {interactionId: interactionId, helpful: helpful}); // Debug logging
+			
+			if (!interactionId) {
+				console.log('AI Chatbot: No interaction ID found, ignoring click'); // Debug logging
+				return;
+			}
 			
 			// Disable all feedback buttons for this message
 			$btn.closest('.chat-message').find('.feedback-btn').prop('disabled', true);
