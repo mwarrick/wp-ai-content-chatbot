@@ -70,6 +70,28 @@ class AI_Content_Chatbot {
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+        
+        // Create chatbot interactions log table
+        $log_table_name = $wpdb->prefix . 'chatbot_interactions';
+        
+        $log_sql = "CREATE TABLE $log_table_name (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            user_query text NOT NULL,
+            ai_response longtext,
+            relevant_content longtext,
+            error_message text,
+            response_time_ms int(11) DEFAULT 0,
+            api_model varchar(100),
+            user_ip varchar(45),
+            user_agent text,
+            timestamp datetime DEFAULT CURRENT_TIMESTAMP,
+            success tinyint(1) DEFAULT 1,
+            PRIMARY KEY (id),
+            KEY timestamp (timestamp),
+            KEY success (success)
+        ) $charset_collate;";
+        
+        dbDelta($log_sql);
     }
     
     private function set_default_options() {
@@ -169,6 +191,15 @@ Website Content:
             'manage_options',
             'ai-chatbot-excluded-keywords',
             array($this, 'excluded_keywords_page')
+        );
+        
+        add_submenu_page(
+            'ai-chatbot',
+            'Interaction Logs',
+            'Interaction Logs',
+            'manage_options',
+            'ai-chatbot-logs',
+            array($this, 'interaction_logs_page')
         );
 
         // Hidden page for editing indexed content
@@ -409,6 +440,10 @@ Website Content:
     public function excluded_keywords_page() {
         include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/excluded-keywords.php';
     }
+    
+    public function interaction_logs_page() {
+        include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/interaction-logs.php';
+    }
 
     public function edit_indexed_content_page() {
         include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/edit-indexed-content.php';
@@ -442,6 +477,34 @@ Website Content:
         arsort($all_keywords);
         
         return $all_keywords;
+    }
+    
+    /**
+     * Log chatbot interaction for debugging and analytics
+     */
+    private function log_chatbot_interaction($user_query, $ai_response = null, $relevant_content = null, $error_message = null, $response_time_ms = 0, $success = true) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'chatbot_interactions';
+        
+        $user_ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $api_model = get_option('ai_chatbot_model', 'claude-3-5-sonnet-20241022');
+        
+        $wpdb->insert(
+            $table_name,
+            array(
+                'user_query' => $user_query,
+                'ai_response' => $ai_response,
+                'relevant_content' => $relevant_content,
+                'error_message' => $error_message,
+                'response_time_ms' => $response_time_ms,
+                'api_model' => $api_model,
+                'user_ip' => $user_ip,
+                'user_agent' => $user_agent,
+                'success' => $success ? 1 : 0
+            ),
+            array('%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d')
+        );
     }
 
     public function get_claude_models() {
@@ -560,86 +623,113 @@ Website Content:
     
     // Updated to use the refined search logic
     public function handle_chatbot_query() {
-        if (!wp_verify_nonce($_POST['nonce'], 'chatbot_frontend_nonce')) {
-            wp_send_json_error('Security check failed');
-        }
+        $start_time = microtime(true);
+        $user_message = '';
+        $relevant_content = '';
+        $ai_response = '';
+        $error_message = '';
+        $success = true;
         
-        $user_message = sanitize_text_field($_POST['message']);
-        
-        if (empty($user_message)) {
-            wp_send_json_error('No message provided');
-        }
-        
-        $api_key = get_option('ai_chatbot_api_key', '');
-        $model = get_option('ai_chatbot_model', 'claude-3-5-sonnet-20241022');
-        
-        if (empty($api_key)) {
-            wp_send_json_success(array(
-                'response' => 'Sorry, the chatbot is not configured yet. Please contact the site administrator.'
-            ));
-        }
-        
-        // Search indexed content with new logic
-        $relevant_content = $this->search_indexed_content($user_message);
-        
-        // If no relevant content found, return a helpful message instead of letting AI hallucinate
-        if (strpos($relevant_content, 'No relevant content found') !== false || 
-            strpos($relevant_content, 'No indexed content available') !== false ||
-            trim($relevant_content) === '') {
-            wp_send_json_success(array(
-                'response' => 'I don\'t have enough information in the website content to answer that question. Please browse the website or contact us directly for more details.'
-            ));
-        }
-        
-        // Retrieve the custom system prompt from options
-        $custom_prompt = get_option('ai_chatbot_system_prompt');
-        $site_name = get_bloginfo('name');
+        try {
+            // Security check
+            if (!wp_verify_nonce($_POST['nonce'], 'chatbot_frontend_nonce')) {
+                $error_message = 'Security check failed - invalid nonce';
+                $this->log_chatbot_interaction('', '', '', $error_message, 0, false);
+                wp_send_json_error('Security check failed');
+            }
+            
+            $user_message = sanitize_text_field($_POST['message']);
+            
+            if (empty($user_message)) {
+                $error_message = 'No message provided';
+                $this->log_chatbot_interaction('', '', '', $error_message, 0, false);
+                wp_send_json_error('No message provided');
+            }
+            
+            $api_key = get_option('ai_chatbot_api_key', '');
+            $model = get_option('ai_chatbot_model', 'claude-3-5-sonnet-20241022');
+            
+            if (empty($api_key)) {
+                $ai_response = 'Sorry, the chatbot is not configured yet. Please contact the site administrator.';
+                $this->log_chatbot_interaction($user_message, $ai_response, '', 'No API key configured', 0, true);
+                wp_send_json_success(array('response' => $ai_response));
+            }
+            
+            // Search indexed content with new logic
+            $relevant_content = $this->search_indexed_content($user_message);
+            
+            // If no relevant content found, return a helpful message instead of letting AI hallucinate
+            if (strpos($relevant_content, 'No relevant content found') !== false || 
+                strpos($relevant_content, 'No indexed content available') !== false ||
+                trim($relevant_content) === '') {
+                $ai_response = 'I don\'t have enough information in the website content to answer that question. Please browse the website or contact us directly for more details.';
+                $this->log_chatbot_interaction($user_message, $ai_response, $relevant_content, 'No relevant content found', 0, true);
+                wp_send_json_success(array('response' => $ai_response));
+            }
+            
+            // Retrieve the custom system prompt from options
+            $custom_prompt = get_option('ai_chatbot_system_prompt');
+            $site_name = get_bloginfo('name');
 
-        // Replace placeholders in the custom prompt
-        $system_prompt = str_replace(
-            array('[SITE_NAME]', '[RELEVANT_CONTENT]'),
-            array($site_name, $relevant_content),
-            $custom_prompt
-        );
+            // Replace placeholders in the custom prompt
+            $system_prompt = str_replace(
+                array('[SITE_NAME]', '[RELEVANT_CONTENT]'),
+                array($site_name, $relevant_content),
+                $custom_prompt
+            );
 
-        $response = wp_remote_post('https://api.anthropic.com/v1/messages', array(
-            'headers' => array(
-                'Content-Type' => 'application/json',
-                'x-api-key' => $api_key,
-                'anthropic-version' => '2023-06-01'
-            ),
-            'body' => json_encode(array(
-                'model' => $model,
-                'max_tokens' => 300,
-                'system' => $system_prompt,
-                'messages' => array(
-                    array(
-                        'role' => 'user',
-                        'content' => $user_message
+            // Make API call with increased timeout and better error handling
+            $response = wp_remote_post('https://api.anthropic.com/v1/messages', array(
+                'headers' => array(
+                    'Content-Type' => 'application/json',
+                    'x-api-key' => $api_key,
+                    'anthropic-version' => '2023-06-01'
+                ),
+                'body' => json_encode(array(
+                    'model' => $model,
+                    'max_tokens' => 300,
+                    'system' => $system_prompt,
+                    'messages' => array(
+                        array(
+                            'role' => 'user',
+                            'content' => $user_message
+                        )
                     )
-                )
-            )),
-            'timeout' => 30
-        ));
-        
-        if (is_wp_error($response)) {
-            wp_send_json_success(array(
-                'response' => 'I\'m sorry, I\'m having trouble connecting right now. Please try again later.'
+                )),
+                'timeout' => 60, // Increased timeout
+                'blocking' => true
             ));
-        }
-        
-        $response_code = wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
-        
-        if ($response_code === 200 && isset($data['content'][0]['text'])) {
-            wp_send_json_success(array(
-                'response' => $data['content'][0]['text']
-            ));
-        } else {
-            wp_send_json_success(array(
-                'response' => 'I\'m sorry, I encountered an error while processing your request. Please try again.'
-            ));
+            
+            $response_time_ms = round((microtime(true) - $start_time) * 1000);
+            
+            if (is_wp_error($response)) {
+                $error_message = 'API request failed: ' . $response->get_error_message();
+                $ai_response = 'I\'m sorry, I\'m having trouble connecting right now. Please try again later.';
+                $this->log_chatbot_interaction($user_message, $ai_response, $relevant_content, $error_message, $response_time_ms, false);
+                wp_send_json_success(array('response' => $ai_response));
+            }
+            
+            $response_code = wp_remote_retrieve_response_code($response);
+            $body = wp_remote_retrieve_body($response);
+            $data = json_decode($body, true);
+            
+            if ($response_code === 200 && isset($data['content'][0]['text'])) {
+                $ai_response = $data['content'][0]['text'];
+                $this->log_chatbot_interaction($user_message, $ai_response, $relevant_content, '', $response_time_ms, true);
+                wp_send_json_success(array('response' => $ai_response));
+            } else {
+                $error_message = 'API Error (HTTP ' . $response_code . '): ' . $body;
+                $ai_response = 'I\'m sorry, I encountered an error while processing your request. Please try again.';
+                $this->log_chatbot_interaction($user_message, $ai_response, $relevant_content, $error_message, $response_time_ms, false);
+                wp_send_json_success(array('response' => $ai_response));
+            }
+            
+        } catch (Exception $e) {
+            $response_time_ms = round((microtime(true) - $start_time) * 1000);
+            $error_message = 'Exception: ' . $e->getMessage();
+            $ai_response = 'I\'m sorry, I encountered an unexpected error. Please try again later.';
+            $this->log_chatbot_interaction($user_message, $ai_response, $relevant_content, $error_message, $response_time_ms, false);
+            wp_send_json_success(array('response' => $ai_response));
         }
     }
     
