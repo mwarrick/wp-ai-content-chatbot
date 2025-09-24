@@ -75,11 +75,43 @@
 						enabled: !$btn.prop('disabled')
 					});
 					
-					// Add direct click handler for testing
-					$btn.off('click.test').on('click.test', function(e) {
-						console.log('AI Chatbot: Direct click handler triggered for button ' + index);
-						e.stopPropagation();
-					});
+                    // Add direct click handler for testing
+                    $btn.off('click.test').on('click.test', function(e) {
+                        console.log('AI Chatbot: Direct click handler triggered for button ' + index);
+                        e.stopPropagation();
+                        
+                        // Try to trigger the feedback submission directly
+                        console.log('AI Chatbot: Attempting direct feedback submission');
+                        var interactionId = $btn.data('interaction-id');
+                        var helpful = $btn.data('helpful');
+                        
+                        if (interactionId) {
+                            console.log('AI Chatbot: Direct submission data:', {interaction_id: interactionId, helpful: helpful});
+                            
+                            // Immediately disable all feedback buttons and show feedback
+                            var $feedbackButtons = $btn.closest('.feedback-buttons');
+                            $feedbackButtons.html('<span style="color: #28a745; font-size: 12px; font-weight: bold;">✓ Thank you for your feedback!</span>');
+                            
+                            // Submit feedback directly
+                            $.post((window.AIChatbot && AIChatbot.ajaxUrl) ? AIChatbot.ajaxUrl : window.ajaxurl, {
+                                action: 'submit_feedback',
+                                interaction_id: interactionId,
+                                helpful: helpful,
+                                nonce: (window.AIChatbot && AIChatbot.nonce) ? AIChatbot.nonce : ''
+                            }).done(function(response){
+                                console.log('AI Chatbot: Direct feedback response:', response);
+                                if (!response || !response.success) {
+                                    console.log('AI Chatbot: Direct feedback submission failed:', response);
+                                    // Show error message if submission failed
+                                    $feedbackButtons.html('<span style="color: #dc3545; font-size: 12px;">✗ Feedback submission failed. Please try again.</span>');
+                                }
+                            }).fail(function(xhr, status, error){
+                                console.log('AI Chatbot: Direct feedback AJAX failed:', status, error, xhr.responseText);
+                                // Show error message if AJAX failed
+                                $feedbackButtons.html('<span style="color: #dc3545; font-size: 12px;">✗ Feedback submission failed. Please try again.</span>');
+                            });
+                        }
+                    });
 					
 					// Check if button is covered by another element
 					var buttonRect = $btn[0].getBoundingClientRect();
@@ -174,47 +206,52 @@
 			}
 		});
 
-		// Feedback button handlers
-		$(document).on('click', '.feedback-btn', function(e){
-			console.log('AI Chatbot: Feedback button clicked'); // Debug logging
-			e.preventDefault();
-			var $btn = $(this);
-			var interactionId = $btn.data('interaction-id');
-			var helpful = $btn.data('helpful');
-			
-			console.log('AI Chatbot: Feedback button data:', {interactionId: interactionId, helpful: helpful}); // Debug logging
-			
-			if (!interactionId) {
-				console.log('AI Chatbot: No interaction ID found, ignoring click'); // Debug logging
-				return;
-			}
-			
-			// Disable all feedback buttons for this message
-			$btn.closest('.chat-message').find('.feedback-btn').prop('disabled', true);
-			
-			// Submit feedback
-			console.log('Submitting feedback:', {interaction_id: interactionId, helpful: helpful}); // Debug logging
-			$.post((window.AIChatbot && AIChatbot.ajaxUrl) ? AIChatbot.ajaxUrl : window.ajaxurl, {
-				action: 'submit_feedback',
-				interaction_id: interactionId,
-				helpful: helpful,
-				nonce: (window.AIChatbot && AIChatbot.nonce) ? AIChatbot.nonce : ''
-			}).done(function(response){
-				console.log('Feedback response:', response); // Debug logging
-				if (response && response.success) {
-					// Show feedback confirmation
-					var $feedbackButtons = $btn.closest('.feedback-buttons');
-					$feedbackButtons.html('<span style="color: #28a745; font-size: 12px;">✓ Thank you for your feedback!</span>');
-				} else {
-					console.log('Feedback submission failed:', response); // Debug logging
-					// Re-enable buttons on error
-					$btn.closest('.chat-message').find('.feedback-btn').prop('disabled', false);
-				}
-			}).fail(function(xhr, status, error){
-				console.log('Feedback AJAX failed:', status, error, xhr.responseText); // Debug logging
-				// Re-enable buttons on error
-				$btn.closest('.chat-message').find('.feedback-btn').prop('disabled', false);
-			});
-		});
+        // Feedback button handlers
+        $(document).on('click', '.feedback-btn', function(e){
+            console.log('AI Chatbot: Main feedback button clicked - EVENT DELEGATION WORKING!'); // Debug logging
+            e.preventDefault();
+            var $btn = $(this);
+            var interactionId = $btn.data('interaction-id');
+            var helpful = $btn.data('helpful');
+            
+            console.log('AI Chatbot: Main feedback button data:', {interactionId: interactionId, helpful: helpful}); // Debug logging
+            
+            if (!interactionId) {
+                console.log('AI Chatbot: No interaction ID found, ignoring click'); // Debug logging
+                return;
+            }
+            
+            // Disable all feedback buttons for this message
+            $btn.closest('.chat-message').find('.feedback-btn').prop('disabled', true);
+            
+            // Submit feedback
+            console.log('Submitting feedback:', {interaction_id: interactionId, helpful: helpful}); // Debug logging
+            $.post((window.AIChatbot && AIChatbot.ajaxUrl) ? AIChatbot.ajaxUrl : window.ajaxurl, {
+                action: 'submit_feedback',
+                interaction_id: interactionId,
+                helpful: helpful,
+                nonce: (window.AIChatbot && AIChatbot.nonce) ? AIChatbot.nonce : ''
+            }).done(function(response){
+                console.log('Feedback response:', response); // Debug logging
+                if (response && response.success) {
+                    // Show feedback confirmation
+                    var $feedbackButtons = $btn.closest('.feedback-buttons');
+                    $feedbackButtons.html('<span style="color: #28a745; font-size: 12px;">✓ Thank you for your feedback!</span>');
+                } else {
+                    console.log('Feedback submission failed:', response); // Debug logging
+                    // Re-enable buttons on error
+                    $btn.closest('.chat-message').find('.feedback-btn').prop('disabled', false);
+                }
+            }).fail(function(xhr, status, error){
+                console.log('Feedback AJAX failed:', status, error, xhr.responseText); // Debug logging
+                // Re-enable buttons on error
+                $btn.closest('.chat-message').find('.feedback-btn').prop('disabled', false);
+            });
+        });
+        
+        // Test event delegation with a simple click handler
+        $(document).on('click', '.feedback-btn', function(e){
+            console.log('AI Chatbot: TEST - Event delegation is working for feedback buttons!');
+        });
 	});
 })(jQuery);

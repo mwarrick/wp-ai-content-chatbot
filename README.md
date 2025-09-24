@@ -32,6 +32,8 @@ A powerful WordPress plugin that creates an intelligent chatbot powered by Claud
 - **Interaction Logging**: Complete database logging of all chatbot interactions
 - **Error Tracking**: Detailed error messages and response time monitoring
 - **Usage Analytics**: Track user queries, success rates, and performance metrics
+- **User Feedback System**: Thumbs up/down feedback collection with database storage
+- **Feedback Analytics**: Track helpfulness rates and user satisfaction metrics
 - **Keyword Management**: Visual interface for managing excluded keywords with frequency counts
 
 ## Installation
@@ -111,8 +113,9 @@ wp-ai-content-chatbot/
 
 ## Database Schema
 
-The plugin creates a custom table `wp_chatbot_content_index` with the following structure:
+The plugin creates two custom tables:
 
+### Content Index Table (`wp_chatbot_content_index`)
 ```sql
 CREATE TABLE wp_chatbot_content_index (
     id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -125,6 +128,28 @@ CREATE TABLE wp_chatbot_content_index (
     tags text,
     keywords text,
     indexed_date datetime DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id)
+);
+```
+
+### Interaction Logs Table (`wp_chatbot_interactions`)
+```sql
+CREATE TABLE wp_chatbot_interactions (
+    id mediumint(9) NOT NULL AUTO_INCREMENT,
+    user_query text NOT NULL,
+    ai_response longtext,
+    relevant_content longtext,
+    error_message text,
+    response_time_ms int(11) DEFAULT 0,
+    api_model varchar(100),
+    user_ip varchar(45),
+    user_agent text,
+    timestamp datetime DEFAULT CURRENT_TIMESTAMP,
+    success tinyint(1) DEFAULT 1,
+    feedback_rating tinyint(1) DEFAULT NULL,
+    feedback_helpful tinyint(1) DEFAULT NULL,
+    feedback_comment text,
+    feedback_timestamp datetime DEFAULT NULL,
     PRIMARY KEY (id)
 );
 ```
@@ -179,6 +204,8 @@ For issues, feature requests, or questions:
 ### Version 1.8.0 - Major Feature Release
 - **🔍 Comprehensive Debugging System**: Added complete interaction logging with database storage
 - **📊 Admin Analytics Dashboard**: New "Interaction Logs" page with filtering, stats, and detailed views
+- **👍 User Feedback System**: Thumbs up/down feedback collection with immediate visual feedback
+- **📈 Feedback Analytics**: Track helpfulness rates, user satisfaction, and response quality metrics
 - **🛡️ Enhanced Error Handling**: Improved timeout handling (60s), exception catching, and error logging
 - **🚫 Fixed Keyword Exclusion**: Excluded keywords now properly work in both indexing and search
 - **🎯 Improved Search Algorithm**: Better phrase handling, stopword filtering, and relevance scoring
