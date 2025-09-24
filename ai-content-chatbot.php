@@ -787,12 +787,25 @@ Website Content:
 		// Common stopwords to ignore in matching
 		$stop_words = array('a','about','above','after','again','against','all','am','an','and','any','are','as','at','be','because','been','before','being','below','between','both','but','by','did','do','does','doing','down','during','each','few','for','from','further','had','has','have','having','he','her','here','hers','herself','him','himself','his','how','i','if','in','into','is','it','its','itself','me','more','most','my','myself','no','nor','not','of','off','on','once','only','or','other','our','ours','ourselves','out','over','own','same','she','should','so','some','such','than','that','the','their','theirs','them','themselves','then','there','these','they','this','those','through','to','too','under','until','up','very','was','we','were','what','when','where','which','while','who','whom','why','with','you','your','yours','yourself','yourselves');
 		
+		// Add excluded keywords from admin settings
+		$excluded_keywords = get_option('ai_chatbot_excluded_keywords', '');
+		if (!empty($excluded_keywords)) {
+			$excluded_array = array_map('trim', explode(',', $excluded_keywords));
+			$excluded_array = array_filter($excluded_array); // Remove empty values
+			$stop_words = array_merge($stop_words, $excluded_array);
+		}
+		
 		foreach ($tokens as $t) {
 			$t = trim($t);
 			if ($t === '') { continue; }
 			if (strlen($t) <= 2 && $t !== 'bi') { continue; }
 			if (in_array($t, $stop_words, true)) { continue; }
 			$terms[] = $t;
+		}
+		
+		// If all terms were filtered out (all excluded keywords), return no content
+		if (empty($terms) && empty($phrases)) {
+			return "No relevant content found. (All search terms were excluded keywords)";
 		}
 		
 		// Special handling for "power bi" phrase and variant "powerbi"
