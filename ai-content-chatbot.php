@@ -3,7 +3,7 @@
  * Plugin Name: AI Content Chatbot
  * Plugin URI: https://warrick.net
  * Description: An intelligent chatbot that reads and understands your website content to answer visitor questions.
- * Version: 1.7.3
+ * Version: 1.7.4
  * Author: Mark Warrick
  * License: GPL v2 or later
  */
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 // Define plugin constants
 define('AI_CHATBOT_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('AI_CHATBOT_PLUGIN_PATH', plugin_dir_path(__FILE__));
-define('AI_CHATBOT_VERSION', '1.7.3');
+define('AI_CHATBOT_VERSION', '1.7.4');
 
 class AI_Content_Chatbot {
     
