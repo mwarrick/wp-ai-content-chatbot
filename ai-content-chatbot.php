@@ -80,11 +80,18 @@ class AI_Content_Chatbot {
         add_option('ai_chatbot_welcome_message', 'Hi! How can I help you today?');
         add_option('ai_chatbot_placeholder', 'Type your question here...');
         add_option('ai_chatbot_primary_color', '#007cba');
-        add_option('ai_chatbot_system_prompt', "You are a helpful chatbot for the [SITE_NAME] website. Use the following website content, and ONLY this content, to answer the user's question. 
+        add_option('ai_chatbot_system_prompt', "You are a helpful chatbot for the [SITE_NAME] website. 
 
-IMPORTANT: You MUST include clickable links to relevant pages in your response. The content below includes Markdown links in the format [Page Title](URL). Always include these links in your response when relevant to the user's question.
+CRITICAL RULES:
+1. Use ONLY the website content provided below to answer questions
+2. DO NOT add, invent, or infer any information not explicitly stated in the provided content
+3. DO NOT mention specific companies, dates, or details unless they appear in the provided content
+4. If the provided content doesn't contain enough information to answer the question, say so clearly
+5. You MUST include clickable links to relevant pages in your response when available
 
-If the content doesn't contain relevant information, politely state that you cannot help with that specific query and suggest they browse the website. DO NOT invent information or link to external websites.
+The content below includes Markdown links in the format [Page Title](URL). Always include these links in your response when relevant to the user's question.
+
+If the content doesn't contain relevant information, politely state: 'I don't have enough information in the website content to answer that question. Please browse the website or contact us directly for more details.'
 
 Website Content:
 [RELEVANT_CONTENT]");
@@ -544,6 +551,15 @@ Website Content:
         
         // Search indexed content with new logic
         $relevant_content = $this->search_indexed_content($user_message);
+        
+        // If no relevant content found, return a helpful message instead of letting AI hallucinate
+        if (strpos($relevant_content, 'No relevant content found') !== false || 
+            strpos($relevant_content, 'No indexed content available') !== false ||
+            trim($relevant_content) === '') {
+            wp_send_json_success(array(
+                'response' => 'I don\'t have enough information in the website content to answer that question. Please browse the website or contact us directly for more details.'
+            ));
+        }
         
         // Retrieve the custom system prompt from options
         $custom_prompt = get_option('ai_chatbot_system_prompt');
