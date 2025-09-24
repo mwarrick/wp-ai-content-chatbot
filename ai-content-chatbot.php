@@ -413,6 +413,36 @@ Website Content:
     public function edit_indexed_content_page() {
         include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/edit-indexed-content.php';
     }
+    
+    /**
+     * Get all unique keywords from indexed content
+     */
+    public function get_all_keywords() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'chatbot_content_index';
+        
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+            return array();
+        }
+        
+        $results = $wpdb->get_results("SELECT keywords FROM $table_name WHERE keywords != ''");
+        $all_keywords = array();
+        
+        foreach ($results as $result) {
+            $keywords = explode(', ', $result->keywords);
+            foreach ($keywords as $keyword) {
+                $keyword = trim($keyword);
+                if (!empty($keyword)) {
+                    $all_keywords[$keyword] = isset($all_keywords[$keyword]) ? $all_keywords[$keyword] + 1 : 1;
+                }
+            }
+        }
+        
+        // Sort by frequency (most used first)
+        arsort($all_keywords);
+        
+        return $all_keywords;
+    }
 
     public function get_claude_models() {
         if (!current_user_can('manage_options')) {
