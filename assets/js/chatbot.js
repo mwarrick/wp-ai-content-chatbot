@@ -1,5 +1,6 @@
 (function($){
 	$(document).ready(function(){
+		console.log('AI Chatbot: JavaScript loaded successfully'); // Debug logging
 		var chatOpen = false;
 		var isProcessing = false;
 
@@ -58,23 +59,32 @@
 		}
 
 		function sendMessage() {
+			console.log('AI Chatbot: sendMessage called'); // Debug logging
 			if (isProcessing) return;
 			var message = $('#chat-input').val().trim();
 			if (!message) return;
 
+			console.log('AI Chatbot: Sending message:', message); // Debug logging
 			addMessage(message, 'user');
 			$('#chat-input').val('');
 			showTyping();
 			isProcessing = true;
 			$('#send-button').prop('disabled', true);
 
+			var ajaxUrl = (window.AIChatbot && AIChatbot.ajaxUrl) ? AIChatbot.ajaxUrl : window.ajaxurl;
+			var nonce = (window.AIChatbot && AIChatbot.nonce) ? AIChatbot.nonce : '';
+			
+			console.log('AI Chatbot: AJAX URL:', ajaxUrl); // Debug logging
+			console.log('AI Chatbot: Nonce:', nonce); // Debug logging
+			console.log('AI Chatbot: AIChatbot object:', window.AIChatbot); // Debug logging
+			
 			$.ajax({
-				url: (window.AIChatbot && AIChatbot.ajaxUrl) ? AIChatbot.ajaxUrl : window.ajaxurl,
+				url: ajaxUrl,
 				type: 'POST',
 				data: {
 					action: 'chatbot_query',
 					message: message,
-					nonce: (window.AIChatbot && AIChatbot.nonce) ? AIChatbot.nonce : ''
+					nonce: nonce
 				}
 			}).done(function(response){
 				hideTyping();
