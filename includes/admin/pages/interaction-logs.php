@@ -208,14 +208,84 @@ $total_pages = ceil($total_items / $per_page);
 
 <script>
 function showLogDetails(logId) {
-    // This would typically make an AJAX call to get full log details
-    // For now, we'll show a placeholder
-    document.getElementById('log-details-content').innerHTML = '<p>Loading details for log ID: ' + logId + '</p><p><em>Full details view would be implemented with AJAX call to get complete log data.</em></p>';
+    document.getElementById('log-details-content').innerHTML = '<p><em>Loading details...</em></p>';
     document.getElementById('log-details-modal').style.display = 'block';
+    
+    // Make AJAX call to get log details
+    jQuery.post(ajaxurl, {
+        action: 'get_log_details',
+        log_id: logId,
+        nonce: '<?php echo wp_create_nonce('ai_chatbot_admin_nonce'); ?>'
+    }, function(response) {
+        if (response.success) {
+            var log = response.data;
+            var html = '<div style="margin-bottom: 20px;">';
+            
+            // Basic info
+            html += '<h3>Basic Information</h3>';
+            html += '<table class="widefat" style="margin-bottom: 20px;">';
+            html += '<tr><td><strong>ID:</strong></td><td>' + log.id + '</td></tr>';
+            html += '<tr><td><strong>Timestamp:</strong></td><td>' + log.timestamp + '</td></tr>';
+            html += '<tr><td><strong>Status:</strong></td><td>' + (log.success == 1 ? '<span style="color: green;">✓ Success</span>' : '<span style="color: red;">✗ Error</span>') + '</td></tr>';
+            html += '<tr><td><strong>Response Time:</strong></td><td>' + (log.response_time_ms > 0 ? log.response_time_ms + 'ms' : 'N/A') + '</td></tr>';
+            html += '<tr><td><strong>API Model:</strong></td><td>' + (log.api_model || 'N/A') + '</td></tr>';
+            html += '<tr><td><strong>User IP:</strong></td><td>' + (log.user_ip || 'N/A') + '</td></tr>';
+            html += '</table>';
+            
+            // User query
+            html += '<h3>User Query</h3>';
+            html += '<div style="background: #f9f9f9; padding: 15px; border-left: 4px solid #0073aa; margin-bottom: 20px;">';
+            html += '<pre style="white-space: pre-wrap; margin: 0;">' + escapeHtml(log.user_query || 'N/A') + '</pre>';
+            html += '</div>';
+            
+            // AI response
+            html += '<h3>AI Response</h3>';
+            html += '<div style="background: #f0f8ff; padding: 15px; border-left: 4px solid #28a745; margin-bottom: 20px;">';
+            html += '<pre style="white-space: pre-wrap; margin: 0;">' + escapeHtml(log.ai_response || 'N/A') + '</pre>';
+            html += '</div>';
+            
+            // Relevant content
+            if (log.relevant_content && log.relevant_content.trim() !== '') {
+                html += '<h3>Relevant Content Found</h3>';
+                html += '<div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin-bottom: 20px; max-height: 300px; overflow-y: auto;">';
+                html += '<pre style="white-space: pre-wrap; margin: 0; font-size: 12px;">' + escapeHtml(log.relevant_content) + '</pre>';
+                html += '</div>';
+            }
+            
+            // Error message
+            if (log.error_message && log.error_message.trim() !== '') {
+                html += '<h3>Error Details</h3>';
+                html += '<div style="background: #f8d7da; padding: 15px; border-left: 4px solid #dc3545; margin-bottom: 20px;">';
+                html += '<pre style="white-space: pre-wrap; margin: 0; color: #721c24;">' + escapeHtml(log.error_message) + '</pre>';
+                html += '</div>';
+            }
+            
+            // User agent
+            if (log.user_agent && log.user_agent.trim() !== '') {
+                html += '<h3>User Agent</h3>';
+                html += '<div style="background: #e2e3e5; padding: 15px; border-left: 4px solid #6c757d; margin-bottom: 20px;">';
+                html += '<pre style="white-space: pre-wrap; margin: 0; font-size: 11px;">' + escapeHtml(log.user_agent) + '</pre>';
+                html += '</div>';
+            }
+            
+            html += '</div>';
+            document.getElementById('log-details-content').innerHTML = html;
+        } else {
+            document.getElementById('log-details-content').innerHTML = '<p style="color: red;">Error loading log details: ' + (response.data || 'Unknown error') + '</p>';
+        }
+    }).fail(function() {
+        document.getElementById('log-details-content').innerHTML = '<p style="color: red;">Failed to load log details. Please try again.</p>';
+    });
 }
 
 function closeLogDetails() {
     document.getElementById('log-details-modal').style.display = 'none';
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Close modal when clicking outside

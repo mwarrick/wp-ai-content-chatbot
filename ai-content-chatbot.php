@@ -34,6 +34,7 @@ class AI_Content_Chatbot {
         add_action('wp_ajax_nopriv_chatbot_query', array($this, 'handle_chatbot_query'));
         add_action('wp_ajax_clear_content_index', array($this, 'clear_content_index'));
         add_action('wp_ajax_index_all_content', array($this, 'index_all_content'));
+        add_action('wp_ajax_get_log_details', array($this, 'get_log_details'));
         
         register_activation_hook(__FILE__, array($this, 'activate'));
     }
@@ -619,6 +620,33 @@ Website Content:
             }
             wp_send_json_error($error_msg);
         }
+    }
+    
+    public function get_log_details() {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permission denied');
+        }
+        
+        if (!wp_verify_nonce($_POST['nonce'], 'ai_chatbot_admin_nonce')) {
+            wp_send_json_error('Invalid nonce');
+        }
+        
+        $log_id = intval($_POST['log_id']);
+        
+        if (empty($log_id)) {
+            wp_send_json_error('Invalid log ID');
+        }
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'chatbot_interactions';
+        
+        $log = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $log_id));
+        
+        if (!$log) {
+            wp_send_json_error('Log not found');
+        }
+        
+        wp_send_json_success($log);
     }
     
     // Updated to use the refined search logic
