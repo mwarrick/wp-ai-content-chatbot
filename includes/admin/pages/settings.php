@@ -11,6 +11,13 @@ if (isset($_POST['submit'])) {
     update_option('ai_chatbot_primary_color', sanitize_hex_color($_POST['ai_chatbot_primary_color']));
     update_option('ai_chatbot_system_prompt', sanitize_textarea_field($_POST['ai_chatbot_system_prompt']));
     
+    // Handle post type arrays
+    $included_post_types = isset($_POST['ai_chatbot_included_post_types']) ? array_map('sanitize_text_field', $_POST['ai_chatbot_included_post_types']) : array('post', 'page');
+    $excluded_post_types = isset($_POST['ai_chatbot_excluded_post_types']) ? array_map('sanitize_text_field', $_POST['ai_chatbot_excluded_post_types']) : array();
+    
+    update_option('ai_chatbot_included_post_types', $included_post_types);
+    update_option('ai_chatbot_excluded_post_types', $excluded_post_types);
+    
     echo '<div class="notice notice-success"><p>Settings saved!</p></div>';
 }
 ?>
@@ -56,6 +63,33 @@ if (isset($_POST['submit'])) {
                 <td>
                     <textarea name="ai_chatbot_system_prompt" rows="8" cols="50" class="large-text code"><?php echo esc_textarea(get_option('ai_chatbot_system_prompt')); ?></textarea>
                     <p class="description">This is the core instruction set for the AI. Use <code>[SITE_NAME]</code> and <code>[RELEVANT_CONTENT]</code> as dynamic placeholders.</p>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">Post Types to Index</th>
+                <td>
+                    <?php 
+                    $included_post_types = get_option('ai_chatbot_included_post_types', array('post', 'page'));
+                    $available_post_types = get_post_types(array('public' => true), 'objects');
+                    foreach ($available_post_types as $post_type) {
+                        $checked = in_array($post_type->name, $included_post_types) ? 'checked' : '';
+                        echo '<label style="display: block; margin: 5px 0;"><input type="checkbox" name="ai_chatbot_included_post_types[]" value="' . esc_attr($post_type->name) . '" ' . $checked . '> ' . esc_html($post_type->label) . ' (' . esc_html($post_type->name) . ')</label>';
+                    }
+                    ?>
+                    <p class="description">Select which post types should be indexed for the chatbot. Only published content will be indexed.</p>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">Excluded Post Types</th>
+                <td>
+                    <?php 
+                    $excluded_post_types = get_option('ai_chatbot_excluded_post_types', array());
+                    foreach ($available_post_types as $post_type) {
+                        $checked = in_array($post_type->name, $excluded_post_types) ? 'checked' : '';
+                        echo '<label style="display: block; margin: 5px 0;"><input type="checkbox" name="ai_chatbot_excluded_post_types[]" value="' . esc_attr($post_type->name) . '" ' . $checked . '> ' . esc_html($post_type->label) . ' (' . esc_html($post_type->name) . ')</label>';
+                    }
+                    ?>
+                    <p class="description">Select post types to completely exclude from indexing. This overrides the "Post Types to Index" setting above.</p>
                 </td>
             </tr>
         </table>

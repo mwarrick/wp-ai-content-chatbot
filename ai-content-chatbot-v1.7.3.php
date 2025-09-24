@@ -80,11 +80,13 @@ class AI_Content_Chatbot {
         add_option('ai_chatbot_welcome_message', 'Hi! How can I help you today?');
         add_option('ai_chatbot_placeholder', 'Type your question here...');
         add_option('ai_chatbot_primary_color', '#007cba');
-        add_option('ai_chatbot_system_prompt', "You are a helpful chatbot for the [SITE_NAME] website. Your primary goal is to help users find bike tours based on their geographic location and skill level. Use the following website content, and ONLY this content, to answer the user's question. You MUST include links to the relevant pages in your response if they are provided. If the content doesn't contain relevant information, politely state that you cannot help with that specific query and suggest they browse the website. DO NOT invent information or link to external websites.
+        add_option('ai_chatbot_system_prompt', "You are a helpful chatbot for the [SITE_NAME] website. Use the following website content, and ONLY this content, to answer the user's question. You MUST include links to the relevant pages in your response if they are provided. If the content doesn't contain relevant information, politely state that you cannot help with that specific query and suggest they browse the website. DO NOT invent information or link to external websites.
 
 Website Content:
 [RELEVANT_CONTENT]");
         add_option('ai_chatbot_excluded_keywords', '');
+        add_option('ai_chatbot_included_post_types', array('post', 'page'));
+        add_option('ai_chatbot_excluded_post_types', array());
         add_option('ai_chatbot_window_title', 'Chat with us');
         add_option('ai_chatbot_window_width', '350');
         add_option('ai_chatbot_window_height', '450');
@@ -244,8 +246,19 @@ Website Content:
         
         $wpdb->query("TRUNCATE TABLE $table_name");
         
+        // Get post types to index from settings
+        $included_post_types = get_option('ai_chatbot_included_post_types', array('post', 'page'));
+        $excluded_post_types = get_option('ai_chatbot_excluded_post_types', array());
+        
+        // Filter out excluded post types
+        $post_types_to_index = array_diff($included_post_types, $excluded_post_types);
+        
+        if (empty($post_types_to_index)) {
+            wp_send_json_error('No post types selected for indexing');
+        }
+        
         $posts = get_posts(array(
-            'post_type' => array('post', 'page'),
+            'post_type' => $post_types_to_index,
             'post_status' => 'publish',
             'numberposts' => -1
         ));
@@ -257,22 +270,9 @@ Website Content:
             $content = wp_strip_all_tags($content);
             $content = trim(preg_replace('/\s+/', ' ', $content));
 
-            // Extract location from URL structure
+            // Get post URL
             $url = get_permalink($post->ID);
-            $location = '';
-            if (strpos($url, '/great-rides/') !== false) {
-                $path_parts = explode('/', trim(wp_make_link_relative($url), '/'));
-                if (isset($path_parts[1])) {
-                    $location_slug = $path_parts[1];
-                    // Example: "los-angeles-county-guided-mountain-biking-gtours" -> "los-angeles-county"
-                    if (strpos($location_slug, '-county-') !== false) {
-                         $location = str_replace('-county-', ' County', $location_slug);
-                         $location = ucwords(str_replace('-', ' ', $location));
-                    } else {
-                         $location = ucwords(str_replace('-', ' ', $location_slug));
-                    }
-                }
-            }
+            $location = ''; // Location field kept for backward compatibility but not populated
 
             // Get tags and convert to a comma-separated string
             $post_tags = wp_get_post_tags($post->ID, array('fields' => 'names'));
@@ -604,29 +604,6 @@ Website Content:
         
         $search_terms = explode(' ', strtolower($query));
         $where_conditions = array();
-        $location_filter = null;
-        $tags_filter = array();
-
-        // Detect location and tags from the user's query
-        $lower_query = strtolower($query);
-
-        // Simple keyword mapping for locations and tags
-        if (strpos($lower_query, 'los angeles') !== false || strpos($lower_query, 'la') !== false) {
-            $location_filter = 'Los Angeles County';
-        }
-        if (strpos($lower_query, 'orange county') !== false) {
-            $location_filter = 'Orange County';
-        }
-        
-        if (strpos($lower_query, 'beginner') !== false) {
-            $tags_filter[] = 'beginner';
-        }
-        if (strpos($lower_query, 'advanced') !== false) {
-            $tags_filter[] = 'advanced';
-        }
-        if (strpos($lower_query, 'intermediate') !== false) {
-            $tags_filter[] = 'intermediate';
-        }
 
         // Add 'force-search' words that should always be included
         $force_search_words = array('contact', 'about', 'services', 'blog', 'home', 'powerbi');
@@ -643,17 +620,8 @@ Website Content:
         
         $where_clause = implode(' AND ', $where_conditions);
         
-        // Execute the first, most specific search
-        if (!empty($where_conditions) && $location_filter && !empty($tags_filter)) {
-            $sql = "SELECT title, url, content FROM $table_name WHERE $where_clause AND location = %s AND (" . implode(' AND ', array_map(function($t) use ($wpdb) { return $wpdb->prepare('tags LIKE %s', '%' . $wpdb->esc_like($t) . '%'); }, $tags_filter)) . ") ORDER BY indexed_date DESC LIMIT 5";
-            $results = $wpdb->get_results($wpdb->prepare($sql, $location_filter));
-        } elseif (!empty($where_conditions) && $location_filter) {
-            $sql = "SELECT title, url, content FROM $table_name WHERE $where_clause AND location = %s ORDER BY indexed_date DESC LIMIT 5";
-            $results = $wpdb->get_results($wpdb->prepare($sql, $location_filter));
-        } elseif (!empty($where_conditions) && !empty($tags_filter)) {
-             $sql = "SELECT title, url, content FROM $table_name WHERE $where_clause AND (" . implode(' AND ', array_map(function($t) use ($wpdb) { return $wpdb->prepare('tags LIKE %s', '%' . $wpdb->esc_like($t) . '%'); }, $tags_filter)) . ") ORDER BY indexed_date DESC LIMIT 5";
-             $results = $wpdb->get_results($sql);
-        } elseif (!empty($where_conditions)) {
+        // Execute search based on available conditions
+        if (!empty($where_conditions)) {
             $sql = "SELECT title, url, content FROM $table_name WHERE $where_clause ORDER BY indexed_date DESC LIMIT 5";
             $results = $wpdb->get_results($sql);
         } else {
