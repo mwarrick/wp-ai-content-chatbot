@@ -101,6 +101,51 @@ class AI_Content_Chatbot {
         ) $charset_collate;";
         
         dbDelta($log_sql);
+        
+        // Update existing table if it doesn't have feedback columns
+        $this->update_interactions_table_structure();
+    }
+    
+    /**
+     * Update existing interactions table to add feedback columns if they don't exist
+     */
+    private function update_interactions_table_structure() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'chatbot_interactions';
+        
+        // Check if table exists
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+            return; // Table doesn't exist, will be created by dbDelta above
+        }
+        
+        // Check if feedback columns exist
+        $columns = $wpdb->get_results("SHOW COLUMNS FROM $table_name");
+        $column_names = array_column($columns, 'Field');
+        
+        // Add missing feedback columns
+        if (!in_array('feedback_rating', $column_names)) {
+            $wpdb->query("ALTER TABLE $table_name ADD COLUMN feedback_rating tinyint(1) DEFAULT NULL");
+        }
+        if (!in_array('feedback_helpful', $column_names)) {
+            $wpdb->query("ALTER TABLE $table_name ADD COLUMN feedback_helpful tinyint(1) DEFAULT NULL");
+        }
+        if (!in_array('feedback_comment', $column_names)) {
+            $wpdb->query("ALTER TABLE $table_name ADD COLUMN feedback_comment text");
+        }
+        if (!in_array('feedback_timestamp', $column_names)) {
+            $wpdb->query("ALTER TABLE $table_name ADD COLUMN feedback_timestamp datetime DEFAULT NULL");
+        }
+        
+        // Add missing indexes
+        $indexes = $wpdb->get_results("SHOW INDEX FROM $table_name");
+        $index_names = array_column($indexes, 'Key_name');
+        
+        if (!in_array('feedback_rating', $index_names)) {
+            $wpdb->query("ALTER TABLE $table_name ADD INDEX feedback_rating (feedback_rating)");
+        }
+        if (!in_array('feedback_helpful', $index_names)) {
+            $wpdb->query("ALTER TABLE $table_name ADD INDEX feedback_helpful (feedback_helpful)");
+        }
     }
     
     private function set_default_options() {
@@ -495,6 +540,9 @@ Website Content:
         global $wpdb;
         $table_name = $wpdb->prefix . 'chatbot_interactions';
         
+        // Ensure table exists and has correct structure
+        $this->update_interactions_table_structure();
+        
         $user_ip = $_SERVER['REMOTE_ADDR'] ?? '';
         $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
         $api_model = get_option('ai_chatbot_model', 'claude-3-5-sonnet-20241022');
@@ -514,6 +562,11 @@ Website Content:
             ),
             array('%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%d')
         );
+        
+        // Debug logging
+        if ($result === false) {
+            error_log('AI Chatbot: Failed to insert interaction log. Error: ' . $wpdb->last_error);
+        }
         
         return $wpdb->insert_id;
     }
