@@ -74,6 +74,17 @@
 						visible: $btn.is(':visible'),
 						enabled: !$btn.prop('disabled')
 					});
+					
+					// Add direct click handler for testing
+					$btn.off('click.test').on('click.test', function(e) {
+						console.log('AI Chatbot: Direct click handler triggered for button ' + index);
+						e.stopPropagation();
+					});
+					
+					// Check if button is covered by another element
+					var buttonRect = $btn[0].getBoundingClientRect();
+					var elementAtPoint = document.elementFromPoint(buttonRect.left + buttonRect.width/2, buttonRect.top + buttonRect.height/2);
+					console.log('AI Chatbot: Element at button center:', elementAtPoint, 'Button element:', $btn[0]);
 				});
 			}
 			
