@@ -164,11 +164,15 @@ CREATE TABLE wp_chatbot_content_index (
 
 ## Support
 
+**This plugin is provided AS-IS with no support or warranty.**
+
 For issues, feature requests, or questions:
 1. Check the troubleshooting section above
 2. Review the admin dashboard for configuration issues
 3. Test your API connection and content indexing
-4. Contact the plugin developer for additional support
+4. Use the built-in debugging tools (Interaction Logs) to diagnose issues
+
+**No support, updates, or assistance is provided. Use at your own risk.**
 
 ## Changelog
 
