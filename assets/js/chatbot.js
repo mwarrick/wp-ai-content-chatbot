@@ -46,9 +46,9 @@
 				messageHtml += '<div class="message-bubble ' + sender + '">' + htmlContent + '</div>';
 				if (interactionId) {
 					console.log('AI Chatbot: Adding feedback buttons for interaction ID:', interactionId); // Debug logging
-					messageHtml += '<div class="feedback-buttons" style="margin-top: 8px; text-align: right;">';
-					messageHtml += '<button class="feedback-btn helpful" data-interaction-id="' + interactionId + '" data-helpful="1" style="background: none; border: none; color: #28a745; cursor: pointer; font-size: 16px; margin-right: 10px;" title="This was helpful">👍</button>';
-					messageHtml += '<button class="feedback-btn not-helpful" data-interaction-id="' + interactionId + '" data-helpful="0" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 16px;" title="This was not helpful">👎</button>';
+					messageHtml += '<div class="feedback-buttons" style="margin-top: 8px; text-align: right; background: #f0f0f0; padding: 5px; border-radius: 3px;">';
+					messageHtml += '<button class="feedback-btn helpful" data-interaction-id="' + interactionId + '" data-helpful="1" style="background: #28a745; border: 1px solid #28a745; color: white; cursor: pointer; font-size: 16px; margin-right: 10px; padding: 5px 10px; border-radius: 3px;" title="This was helpful">👍 Helpful</button>';
+					messageHtml += '<button class="feedback-btn not-helpful" data-interaction-id="' + interactionId + '" data-helpful="0" style="background: #dc3545; border: 1px solid #dc3545; color: white; cursor: pointer; font-size: 16px; padding: 5px 10px; border-radius: 3px;" title="This was not helpful">👎 Not Helpful</button>';
 					messageHtml += '</div>';
 				} else {
 					console.log('AI Chatbot: No interaction ID provided, skipping feedback buttons'); // Debug logging
@@ -63,6 +63,18 @@
 			if (interactionId) {
 				var $feedbackButtons = $('.feedback-btn[data-interaction-id="' + interactionId + '"]');
 				console.log('AI Chatbot: Feedback buttons created:', $feedbackButtons.length); // Debug logging
+				
+				// Test if buttons are clickable
+				$feedbackButtons.each(function(index) {
+					var $btn = $(this);
+					console.log('AI Chatbot: Button ' + index + ':', {
+						text: $btn.text(),
+						interactionId: $btn.data('interaction-id'),
+						helpful: $btn.data('helpful'),
+						visible: $btn.is(':visible'),
+						enabled: !$btn.prop('disabled')
+					});
+				});
 			}
 			
 			scrollToBottom();
@@ -141,6 +153,13 @@
 			if (chatOpen && !$(e.target).closest('#ai-chatbot-widget').length) {
 				chatOpen = false;
 				$('#ai-chatbot-container').hide();
+			}
+		});
+
+		// Test event delegation
+		$(document).on('click', '*', function(e) {
+			if ($(this).hasClass('feedback-btn')) {
+				console.log('AI Chatbot: Any click on feedback button detected'); // Debug logging
 			}
 		});
 
