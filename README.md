@@ -34,7 +34,8 @@ A powerful WordPress plugin that creates an intelligent chatbot powered by Claud
 - **Usage Analytics**: Track user queries, success rates, and performance metrics
 - **User Feedback System**: Thumbs up/down feedback collection with database storage
 - **Feedback Analytics**: Track helpfulness rates and user satisfaction metrics
-- **Keyword Management**: Visual interface for managing excluded keywords with frequency counts
+- **Advanced Keyword Management**: Visual interface for managing excluded keywords with frequency counts, sortable by popularity or alphabetically
+- **Smart Keyword Exclusion**: Remove already-excluded keywords from selection list with one-click removal
 
 ## Installation
 
@@ -200,6 +201,15 @@ For issues, feature requests, or questions:
 **No support, updates, or assistance is provided. Use at your own risk.**
 
 ## Changelog
+
+### Version 1.8.3 - Enhanced Keyword Management
+- **🔄 Advanced Sorting System**: Added sorting buttons for both available and excluded keywords
+  - Available keywords: Sort by frequency count (high/low) or alphabetically (A-Z/Z-A)
+  - Excluded keywords: Sort alphabetically (A-Z/Z-A) with keyword count display
+- **🎯 Improved User Experience**: Already-excluded keywords removed from selection list for cleaner interface
+- **❌ One-Click Removal**: Interactive removal system with confirmation dialogs and immediate visual feedback
+- **✨ Visual Enhancements**: Active sort button highlighting, hover effects, and responsive button design
+- **🧹 Code Optimization**: Clean JavaScript implementation with efficient DOM manipulation
 
 ### Version 1.8.1 - Feedback System Stable Release
 - **✅ Complete Feedback System**: Fully functional thumbs up/down feedback with immediate visual response

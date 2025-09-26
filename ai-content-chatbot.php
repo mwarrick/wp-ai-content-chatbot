@@ -3,7 +3,7 @@
  * Plugin Name: AI Content Chatbot
  * Plugin URI: https://warrick.net
  * Description: An intelligent chatbot that reads and understands your website content to answer visitor questions.
- * Version: 1.8.1
+ * Version: 1.8.3
  * Author: Mark Warrick
  * License: GPL v2 or later
  */
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 // Define plugin constants
 define('AI_CHATBOT_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('AI_CHATBOT_PLUGIN_PATH', plugin_dir_path(__FILE__));
-define('AI_CHATBOT_VERSION', '1.8.1');
+define('AI_CHATBOT_VERSION', '1.8.3');
 
 class AI_Content_Chatbot {
     
@@ -37,6 +37,11 @@ class AI_Content_Chatbot {
         add_action('wp_ajax_get_log_details', array($this, 'get_log_details'));
         add_action('wp_ajax_submit_feedback', array($this, 'submit_feedback'));
         add_action('wp_ajax_nopriv_submit_feedback', array($this, 'submit_feedback'));
+        
+        // AI Training AJAX handlers
+        add_action('wp_ajax_add_training_example', array($this, 'add_training_example'));
+        add_action('wp_ajax_delete_training_example', array($this, 'delete_training_example'));
+        add_action('wp_ajax_test_training_response', array($this, 'test_training_response'));
         
         register_activation_hook(__FILE__, array($this, 'activate'));
     }
@@ -174,6 +179,7 @@ Website Content:
         add_option('ai_chatbot_excluded_keywords', '');
         add_option('ai_chatbot_included_post_types', array('post', 'page'));
         add_option('ai_chatbot_excluded_post_types', array());
+        add_option('ai_chatbot_training_examples', array());
         add_option('ai_chatbot_window_title', 'Chat with us');
         add_option('ai_chatbot_window_width', '350');
         add_option('ai_chatbot_window_height', '450');
@@ -254,6 +260,15 @@ Website Content:
             'manage_options',
             'ai-chatbot-logs',
             array($this, 'interaction_logs_page')
+        );
+        
+        add_submenu_page(
+            'ai-chatbot',
+            'AI Training',
+            'AI Training',
+            'manage_options',
+            'ai-chatbot-training',
+            array($this, 'ai_training_page')
         );
 
         // Hidden page for editing indexed content
@@ -497,6 +512,10 @@ Website Content:
     
     public function interaction_logs_page() {
         include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/interaction-logs.php';
+    }
+    
+    public function ai_training_page() {
+        include AI_CHATBOT_PLUGIN_PATH . 'includes/admin/pages/ai-training.php';
     }
 
     public function edit_indexed_content_page() {
@@ -789,16 +808,24 @@ Website Content:
                 wp_send_json_success(array('response' => $ai_response, 'interaction_id' => $interaction_id));
             }
             
+            // Get training examples for this query FIRST
+            $training_context = $this->get_training_context_for_query($user_message);
+            
             // Search indexed content with new logic
             $relevant_content = $this->search_indexed_content($user_message);
             
-            // If no relevant content found, return a helpful message instead of letting AI hallucinate
-            if (strpos($relevant_content, 'No relevant content found') !== false || 
-                strpos($relevant_content, 'No indexed content available') !== false ||
-                trim($relevant_content) === '') {
-                $ai_response = 'I don\'t have enough information in the website content to answer that question. Please browse the website or contact us directly for more details.';
-                $interaction_id = $this->log_chatbot_interaction($user_message, $ai_response, $relevant_content, 'No relevant content found', 0, true);
-                wp_send_json_success(array('response' => $ai_response, 'interaction_id' => $interaction_id));
+            // If we have training examples, use them even if no content is found
+            if (strlen($training_context) > 0) {
+                // Training examples found, proceed with training-guided response
+            } else {
+                // If no relevant content found AND no training examples, return a helpful message instead of letting AI hallucinate
+                if (strpos($relevant_content, 'No relevant content found') !== false || 
+                    strpos($relevant_content, 'No indexed content available') !== false ||
+                    trim($relevant_content) === '') {
+                    $ai_response = 'I don\'t have enough information in the website content to answer that question. Please browse the website or contact us directly for more details.';
+                    $interaction_id = $this->log_chatbot_interaction($user_message, $ai_response, $relevant_content, 'No relevant content found', 0, true);
+                    wp_send_json_success(array('response' => $ai_response, 'interaction_id' => $interaction_id));
+                }
             }
             
             // Retrieve the custom system prompt from options
@@ -808,7 +835,7 @@ Website Content:
             // Replace placeholders in the custom prompt
             $system_prompt = str_replace(
                 array('[SITE_NAME]', '[RELEVANT_CONTENT]'),
-                array($site_name, $relevant_content),
+                array($site_name, $training_context . $relevant_content),
                 $custom_prompt
             );
 
@@ -1090,6 +1117,174 @@ Website Content:
         </div>
         
         <?php
+    }
+    
+    /**
+     * Add a new training example
+     */
+    public function add_training_example() {
+        if (!wp_verify_nonce($_POST['nonce'], 'ai_training_nonce')) {
+            wp_send_json_error('Security check failed');
+        }
+        
+        $question = sanitize_text_field($_POST['question']);
+        $correct_answer = sanitize_textarea_field($_POST['correct_answer']);
+        $category = sanitize_text_field($_POST['category']);
+        
+        if (empty($question) || empty($correct_answer)) {
+            wp_send_json_error('Question and answer are required');
+        }
+        
+        $training_examples = get_option('ai_chatbot_training_examples', array());
+        
+        $new_example = array(
+            'id' => uniqid(),
+            'question' => $question,
+            'correct_answer' => $correct_answer,
+            'category' => $category,
+            'created_at' => current_time('mysql'),
+            'created_by' => get_current_user_id()
+        );
+        
+        $training_examples[] = $new_example;
+        update_option('ai_chatbot_training_examples', $training_examples);
+        
+        wp_send_json_success('Training example added successfully');
+    }
+    
+    /**
+     * Delete a training example
+     */
+    public function delete_training_example() {
+        if (!wp_verify_nonce($_POST['nonce'], 'ai_training_nonce')) {
+            wp_send_json_error('Security check failed');
+        }
+        
+        $example_id = sanitize_text_field($_POST['example_id']);
+        $training_examples = get_option('ai_chatbot_training_examples', array());
+        
+        $training_examples = array_filter($training_examples, function($example) use ($example_id) {
+            return $example['id'] !== $example_id;
+        });
+        
+        update_option('ai_chatbot_training_examples', array_values($training_examples));
+        wp_send_json_success('Training example deleted successfully');
+    }
+    
+    /**
+     * Test training response for a given question
+     */
+    public function test_training_response() {
+        if (!wp_verify_nonce($_POST['nonce'], 'ai_training_nonce')) {
+            wp_send_json_error('Security check failed');
+        }
+        
+        $test_query = sanitize_text_field($_POST['test_query']);
+        $training_examples = get_option('ai_chatbot_training_examples', array());
+        
+        if (empty($training_examples)) {
+            wp_send_json_error('No training examples found');
+        }
+        
+        $similar_examples = $this->find_similar_training_examples($test_query, $training_examples);
+        
+        if (empty($similar_examples)) {
+            wp_send_json_success(array(
+                'message' => 'No similar training examples found',
+                'query' => $test_query,
+                'similar_examples' => array()
+            ));
+        } else {
+            wp_send_json_success(array(
+                'message' => 'Similar training examples found',
+                'query' => $test_query,
+                'similar_examples' => $similar_examples,
+                'best_match' => $similar_examples[0]
+            ));
+        }
+    }
+    
+    /**
+     * Find similar training examples for a given query
+     */
+    private function find_similar_training_examples($query, $training_examples) {
+        $query_lower = strtolower(trim($query));
+        $query_words = explode(' ', $query_lower);
+        
+        $similar_examples = array();
+        
+        foreach ($training_examples as $example) {
+            $example_question_lower = strtolower(trim($example['question']));
+            $example_words = explode(' ', $example_question_lower);
+            
+            // Check for exact match first
+            if ($query_lower === $example_question_lower) {
+                $similar_examples[] = array(
+                    'example' => $example,
+                    'similarity_score' => 1.0
+                );
+                continue;
+            }
+            
+            // Check for partial exact match (contains the training question)
+            if (strpos($query_lower, $example_question_lower) !== false || 
+                strpos($example_question_lower, $query_lower) !== false) {
+                $similar_examples[] = array(
+                    'example' => $example,
+                    'similarity_score' => 0.9
+                );
+                continue;
+            }
+            
+            // Calculate similarity based on common words
+            $common_words = array_intersect($query_words, $example_words);
+            $similarity_score = count($common_words) / max(count($query_words), count($example_words));
+            
+            if ($similarity_score > 0.3) { // 30% similarity threshold
+                $similar_examples[] = array(
+                    'example' => $example,
+                    'similarity_score' => $similarity_score
+                );
+            }
+        }
+        
+        // Sort by similarity score
+        usort($similar_examples, function($a, $b) {
+            return $b['similarity_score'] <=> $a['similarity_score'];
+        });
+        
+        return array_slice($similar_examples, 0, 3); // Return top 3 similar examples
+    }
+    
+    /**
+     * Get training context for a specific query to guide AI responses
+     */
+    private function get_training_context_for_query($query) {
+        $training_examples = get_option('ai_chatbot_training_examples', array());
+        
+        if (empty($training_examples)) {
+            return '';
+        }
+        
+        // Find similar training examples
+        $similar_examples = $this->find_similar_training_examples($query, $training_examples);
+        
+        if (empty($similar_examples)) {
+            return '';
+        }
+        
+        // Build training context with high priority
+        $training_context = "\n\n🎯 TRAINING EXAMPLES - HIGH PRIORITY: Use these EXACT responses when questions match:\n";
+        
+        foreach ($similar_examples as $similar) {
+            $example = $similar['example'];
+            $training_context .= "Q: " . $example['question'] . "\n";
+            $training_context .= "A: " . $example['correct_answer'] . "\n\n";
+        }
+        
+        $training_context .= "CRITICAL: If the user's question matches or is similar to any training example above, use that EXACT response format and style. Training examples take priority over general content search.\n\n";
+        
+        return $training_context;
     }
 }
 

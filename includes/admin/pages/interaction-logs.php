@@ -209,6 +209,10 @@ $total_pages = ceil($total_items / $per_page);
                             <button type="button" class="button button-small" onclick="showLogDetails(<?php echo $log->id; ?>)">
                                 View Details
                             </button>
+                            <br><br>
+                            <button type="button" class="button button-small button-secondary" onclick="createTrainingExample(<?php echo $log->id; ?>)" style="background: #0073aa; color: white; border-color: #0073aa;">
+                                Create Training
+                            </button>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -346,11 +350,106 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Create training example from interaction log
+function createTrainingExample(logId) {
+    // Get log details first
+    jQuery.post(ajaxurl, {
+        action: 'get_log_details',
+        log_id: logId,
+        nonce: '<?php echo wp_create_nonce('ai_chatbot_admin_nonce'); ?>'
+    }, function(response) {
+        if (response.success) {
+            var log = response.data;
+            
+            // Create a form to pre-fill training data
+            var formHtml = '<div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">';
+            formHtml += '<h3>Create Training Example from Interaction</h3>';
+            formHtml += '<form id="quick-training-form">';
+            formHtml += '<input type="hidden" name="nonce" value="<?php echo wp_create_nonce('ai_training_nonce'); ?>">';
+            formHtml += '<input type="hidden" name="action" value="add_training_example">';
+            
+            formHtml += '<table class="form-table">';
+            formHtml += '<tr>';
+            formHtml += '<th scope="row"><label>Question</label></th>';
+            formHtml += '<td><input type="text" name="question" value="' + escapeHtml(log.user_query) + '" class="regular-text" readonly style="background: #f0f0f0;"></td>';
+            formHtml += '</tr>';
+            
+            formHtml += '<tr>';
+            formHtml += '<th scope="row"><label>Correct Answer</label></th>';
+            formHtml += '<td><textarea name="correct_answer" rows="4" cols="50" class="regular-text">' + escapeHtml(log.ai_response) + '</textarea>';
+            formHtml += '<p class="description">Edit the AI response to make it the ideal answer for this question.</p></td>';
+            formHtml += '</tr>';
+            
+            formHtml += '<tr>';
+            formHtml += '<th scope="row"><label>Category</label></th>';
+            formHtml += '<td><select name="category">';
+            formHtml += '<option value="general">General</option>';
+            formHtml += '<option value="contact">Contact</option>';
+            formHtml += '<option value="services">Services</option>';
+            formHtml += '<option value="pricing">Pricing</option>';
+            formHtml += '<option value="support">Support</option>';
+            formHtml += '<option value="about">About</option>';
+            formHtml += '</select></td>';
+            formHtml += '</tr>';
+            formHtml += '</table>';
+            
+            formHtml += '<p class="submit">';
+            formHtml += '<input type="submit" class="button button-primary" value="Add Training Example">';
+            formHtml += '<button type="button" class="button" onclick="closeTrainingForm()" style="margin-left: 10px;">Cancel</button>';
+            formHtml += '</p>';
+            
+            formHtml += '</form>';
+            formHtml += '</div>';
+            
+            // Show the form in a modal or inline
+            var modal = document.createElement('div');
+            modal.id = 'training-modal';
+            modal.style.cssText = 'position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);';
+            modal.innerHTML = '<div style="background-color: white; margin: 5% auto; padding: 20px; border-radius: 5px; width: 80%; max-width: 800px; max-height: 80%; overflow-y: auto;">' + formHtml + '</div>';
+            
+            document.body.appendChild(modal);
+            
+            // Handle form submission
+            jQuery('#quick-training-form').on('submit', function(e) {
+                e.preventDefault();
+                
+                var formData = jQuery(this).serialize();
+                
+                jQuery.post(ajaxurl, formData, function(response) {
+                    if (response.success) {
+                        alert('Training example added successfully!');
+                        document.body.removeChild(modal);
+                        // Optionally redirect to training page
+                        window.open('<?php echo admin_url('admin.php?page=ai-chatbot-training'); ?>', '_blank');
+                    } else {
+                        alert('Error: ' + response.data);
+                    }
+                });
+            });
+            
+        } else {
+            alert('Error loading log details: ' + response.data);
+        }
+    });
+}
+
+function closeTrainingForm() {
+    var modal = document.getElementById('training-modal');
+    if (modal) {
+        document.body.removeChild(modal);
+    }
+}
+
 // Close modal when clicking outside
 window.onclick = function(event) {
     var modal = document.getElementById('log-details-modal');
     if (event.target == modal) {
         modal.style.display = 'none';
+    }
+    
+    var trainingModal = document.getElementById('training-modal');
+    if (event.target == trainingModal) {
+        document.body.removeChild(trainingModal);
     }
 }
 </script>
